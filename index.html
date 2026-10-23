@@ -187,7 +187,11 @@ details.rules ul { margin: 10px 0 4px; padding-left: 20px; display: flex; flex-d
 @keyframes flip { from { transform: rotate(-180deg); } to { transform: rotate(0); } }
 .sandbar { flex: 1; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, .12); overflow: hidden; }
 .sandbar i { display: block; height: 100%; background: var(--gold); transition: width .25s linear; }
-.sand.low .sandbar i { background: var(--bad); }
+.sandbar.low i { background: var(--bad); }
+.hud { position: sticky; }
+.hud-right { display: inline-flex; align-items: center; gap: 14px; }
+.hud .sand b { font-size: 20px; }
+.hudbar { position: absolute; left: 0; right: 0; bottom: -1px; height: 4px; border-radius: 0; flex: none; }
 .timerctl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
 /* Scoreboard */
@@ -1228,20 +1232,26 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
     if (sec) sec.textContent = Math.max(0, Math.ceil(left));
     if (bar) bar.style.width = Math.max(0, (left / game.timer) * 100) + "%";
     if (box) box.classList.toggle("low", left <= 10);
+    if (bar) bar.parentElement.classList.toggle("low", left <= 10);
     if (left > 0 || timeoutFired === clockKey || busy || !canWrite) return;
     // The player's own device acts at zero; if they've left, anyone at the table does a few seconds later.
     if (isMyTurn() || ((mode === "local" || amInGame()) && left <= -6)) { timeoutFired = clockKey; timeoutDraw(); }
   }
   setInterval(tick, 250);
+  // The timer lives in the pinned top bar so it stays in view while scrolling the table:
+  // an hourglass with the seconds beside the deck, and a thin bar along the bottom edge that drains.
   function sandHtml() {
     const left = timeLeft();
     if (left === null) return "";
-    const pct = Math.max(0, (left / game.timer) * 100);
-    return `<div class="sand ${left <= 10 ? "low" : ""}" id="sand" role="timer" aria-label="${esc(t("sandTimer"))}">
+    return `<span class="sand ${left <= 10 ? "low" : ""}" id="sand" role="timer" aria-label="${esc(t("sandTimer"))}">
       <svg class="${justFlipped ? "flip" : ""}" width="14" height="20" viewBox="0 0 14 20" aria-hidden="true"><path d="M1 1h12M1 19h12M2.5 1c0 6 9 5 9 9s-9 3-9 9M11.5 1c0 6-9 5-9 9s9 3 9 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
       <span><b id="sandSec">${Math.max(0, Math.ceil(left))}</b>s</span>
-      <span class="sandbar"><i id="sandBar" style="width:${pct}%"></i></span>
-    </div>`;
+    </span>`;
+  }
+  function sandBarHtml() {
+    const left = timeLeft();
+    if (left === null) return "";
+    return `<span class="sandbar hudbar ${left <= 10 ? "low" : ""}" aria-hidden="true"><i id="sandBar" style="width:${Math.max(0, (left / game.timer) * 100)}%"></i></span>`;
   }
   function timerControl(current) {
     if (!canWrite) return "";
@@ -1544,9 +1554,12 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
     let h = `<div class="hud">
       <button class="iconbtn" data-act="modal" data-v="menu" aria-label="${esc(t("menu"))}">${ICON.menu}</button>
       <p class="turnline ${mine ? "mine" : ""}">${headline}</p>
-      <span class="deck" title="${esc(t("deck", { c: game.deck.length }))}" aria-label="${esc(t("deck", { c: game.deck.length }))}"><span class="back" aria-hidden="true"></span><span>${game.deck.length}</span></span>
+      <span class="hud-right">
+        ${over ? "" : sandHtml()}
+        <span class="deck" title="${esc(t("deck", { c: game.deck.length }))}" aria-label="${esc(t("deck", { c: game.deck.length }))}"><span class="back" aria-hidden="true"></span><span>${game.deck.length}</span></span>
+      </span>
+      ${over ? "" : sandBarHtml()}
     </div>`;
-    if (!over) h += sandHtml();
     h += playersRow();
     h += hooks.status(true);
     const cur = game.players[game.turn];
