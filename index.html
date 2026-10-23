@@ -1,0 +1,1795 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mexe-Mexe da Família</title>
+<meta name="description" content="Mexe-Mexe com as regras da família, para jogar junto de qualquer lugar.">
+<meta name="theme-color" content="#173a2d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Mexe-Mexe">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" href="icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@1,700;1,800&family=Alegreya+Sans:wght@400;500;700;800&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<style>
+/* Standalone page: what the Claude page skeleton used to provide, plus connection status. */
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; -webkit-tap-highlight-color: transparent; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+.netpill { margin: 0; display: inline-flex; align-items: center; gap: 8px; align-self: center; padding: 6px 14px; border-radius: 999px; background: var(--shade); font-size: 14px; font-weight: 700; }
+.netpill i { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+.netpill.ok i { background: var(--ok); }
+.netpill.warn { color: var(--bad); }
+.netpill.warn i { background: var(--bad); }
+.screen > .netpill, .wrap > .netpill { align-self: flex-start; }
+.invite { display: flex; flex-direction: column; gap: 10px; }
+a.btn { display: block; text-align: center; text-decoration: none; }
+.btn.whatsapp { background: #25d366; color: #06301a; border-color: transparent; }
+</style>
+</head>
+<body>
+<style>
+:root {
+  /* Layout: a card table. Felt surface, family seated along the top rim, shared melds in the middle, your hand in a wooden tray at the bottom. */
+  --felt: #173a2d;
+  --felt-hi: #21503d;
+  --felt-lo: #0f271e;
+  --rim: #6b4529;
+  --chalk: #edf2ea;
+  --muted: #a7c0b1;
+  --gold: #f2c230;
+  --gold-ink: #2a2105;
+  --card: #fbf8f1;
+  --ink: #1c1b19;
+  --red: #b3261e;
+  --bad: #ff8f80;
+  --ok: #86dfa1;
+  --shade: rgba(0, 0, 0, .2);
+  --line: rgba(237, 242, 234, .22);
+  --f-display: "Alegreya", Georgia, "Times New Roman", serif;
+  --f-body: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --cw: 50px;
+  color-scheme: dark;
+}
+@media (min-width: 720px) { :root { --cw: 62px; } }
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  background-color: var(--felt);
+  background-image: radial-gradient(120% 90% at 50% 25%, var(--felt-hi), var(--felt) 55%, var(--felt-lo));
+  background-attachment: fixed;
+  color: var(--chalk);
+  font-family: var(--f-body);
+  font-size: 16px;
+  line-height: 1.45;
+}
+.wrap {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 14px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 100vh;
+}
+
+/* Segmented controls */
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.seg button { font: 700 12px var(--f-body); letter-spacing: .8px; padding: 6px 10px; background: transparent; color: var(--muted); border: 0; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--chalk); color: var(--felt); }
+
+/* Buttons */
+.btn { font: 700 15px var(--f-body); padding: 10px 18px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--chalk); cursor: pointer; }
+.btn:hover:not(:disabled) { border-color: var(--chalk); }
+.btn.primary { background: var(--gold); color: var(--gold-ink); border-color: transparent; }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.06); }
+.btn.small { font-size: 13px; padding: 6px 12px; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+button:focus-visible, input:focus-visible, summary:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+
+.status { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.turnline { font-family: var(--f-display); font-style: italic; font-weight: 700; font-size: 24px; margin: 0; text-wrap: balance; }
+.turnline.mine { color: var(--gold); }
+.deck { display: inline-flex; align-items: center; gap: 10px; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.deck .back { width: 26px; height: 36px; border-radius: 4px; background: repeating-linear-gradient(45deg, #8e2f25 0 4px, #a8392d 4px 8px); border: 2px solid var(--card); box-shadow: 2px 2px 0 var(--card), 3px 3px 0 rgba(0,0,0,.3); }
+
+/* Table */
+.table { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 12px; min-height: 170px; padding: 14px; border-radius: 18px; background: rgba(0, 0, 0, .13); border: 1px solid rgba(255, 255, 255, .06); }
+.table .empty { color: var(--muted); font-size: 15px; max-width: 46ch; margin: auto; text-align: center; }
+.meld { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px 8px 8px; border-radius: 12px; background: var(--shade); border: 1.5px dashed transparent; min-width: 0; }
+.meld.bad { border-color: var(--bad); }
+.meld .tag { font-size: 12px; color: var(--bad); font-weight: 700; }
+.meld .row { display: flex; padding-top: 6px; }
+.meld .row .card + .card { margin-left: calc(var(--cw) * -0.48); transition: margin-left .12s ease, transform .12s ease, box-shadow .12s ease; }
+/* A picked card slides its right-hand neighbour over so nothing gets covered. */
+.meld .row .card.sel + .card { margin-left: 6px; }
+.drop { font: 700 13px var(--f-body); padding: 6px 10px; border-radius: 8px; border: 1.5px dashed var(--gold); color: var(--gold); background: transparent; cursor: pointer; }
+.drop:hover { background: rgba(242, 194, 48, .1); }
+.newmeld { align-self: center; padding: 18px 14px; }
+
+/* Cards */
+.card {
+  position: relative; flex: none;
+  width: var(--cw); height: calc(var(--cw) * 1.4);
+  border-radius: 6px; border: 1px solid rgba(0, 0, 0, .28);
+  background: var(--card); color: var(--ink);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .4);
+  padding: 0; cursor: pointer; font-family: var(--f-body);
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+.card .ix { position: absolute; top: 3px; left: 4px; display: flex; flex-direction: column; align-items: center; line-height: .95; font-weight: 800; font-size: calc(var(--cw) * .32); }
+.card .ix i { font-style: normal; font-size: .85em; }
+.card .pip { position: absolute; right: 5px; bottom: 2px; font-size: calc(var(--cw) * .52); line-height: 1; }
+.card.red { color: var(--red); }
+.card.fresh { box-shadow: 0 0 0 2px var(--ok), 0 1px 3px rgba(0, 0, 0, .4); }
+.card.sel { transform: translateY(-7px); box-shadow: 0 0 0 3px var(--gold), 0 8px 14px rgba(0, 0, 0, .45); }
+.card.static { cursor: default; }
+
+/* Tray */
+.tray {
+  position: sticky; bottom: 0; z-index: 5;
+  margin-top: auto;
+  background: var(--felt-lo);
+  border-top: 4px solid var(--rim);
+  border-radius: 16px 16px 0 0;
+  padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column; gap: 8px;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, .35);
+}
+.tray-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.label { font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.hand { display: flex; gap: 6px; overflow-x: auto; padding: 10px 2px 6px; min-height: calc(var(--cw) * 1.4 + 16px); align-items: flex-end; }
+.hand.target { outline: 1.5px dashed var(--gold); outline-offset: -2px; border-radius: 10px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.hint { font-size: 14px; color: var(--muted); margin: 0; }
+.hint.warn { color: var(--bad); }
+.linkbtn { font: 600 13px var(--f-body); background: none; border: 0; color: var(--muted); text-decoration: underline; cursor: pointer; padding: 4px; }
+
+/* Panels */
+.panel { background: rgba(0, 0, 0, .22); border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 560px; }
+.panel h2 { font-family: var(--f-display); font-style: italic; font-weight: 800; font-size: 26px; margin: 0; color: var(--gold); text-wrap: balance; }
+.panel p { margin: 0; }
+.field { display: flex; gap: 8px; flex-wrap: wrap; }
+.field input { flex: 1 1 200px; min-width: 0; font: 500 16px var(--f-body); padding: 10px 14px; border-radius: 999px; border: 1px solid var(--line); background: rgba(0, 0, 0, .25); color: var(--chalk); }
+.field input::placeholder { color: var(--muted); }
+.list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; background: var(--shade); }
+.list .score { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; }
+.note { font-size: 14px; color: var(--muted); }
+.banner { font-family: var(--f-display); font-style: italic; font-weight: 800; font-size: 34px; color: var(--gold); margin: 0; text-wrap: balance; }
+
+.log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 14px; color: var(--muted); }
+.log li:first-child { color: var(--chalk); }
+
+details.rules { background: var(--shade); border-radius: 14px; padding: 10px 16px; }
+details.rules summary { cursor: pointer; font-weight: 700; }
+details.rules ul { margin: 10px 0 4px; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; max-width: 70ch; }
+
+.toast { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 14px); transform: translateX(-50%); z-index: 20; background: var(--chalk); color: var(--felt); font-weight: 700; padding: 10px 18px; border-radius: 999px; box-shadow: 0 6px 18px rgba(0, 0, 0, .4); max-width: calc(100% - 32px); text-align: center; }
+
+/* Sand timer */
+.sand { display: flex; align-items: center; gap: 10px; color: var(--chalk); font-weight: 700; font-variant-numeric: tabular-nums; }
+.sand b { font-size: 18px; }
+.sand.low { color: var(--bad); }
+.sand svg.flip { animation: flip .6s ease; }
+@keyframes flip { from { transform: rotate(-180deg); } to { transform: rotate(0); } }
+.sandbar { flex: 1; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+.sandbar i { display: block; height: 100%; background: var(--gold); transition: width .25s linear; }
+.sand.low .sandbar i { background: var(--bad); }
+.timerctl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* Scoreboard */
+:root { --silver: #cfd7dc; --bronze: #c98b58; }
+.board { display: flex; flex-direction: column; gap: 18px; }
+.board-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+.board-head > div:first-child { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.board-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 780px) { .board-grid { grid-template-columns: minmax(0, 1fr); } }
+.board-grid .panel { max-width: none; }
+.board-side { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.tablewrap { overflow-x: auto; }
+.ranktable { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.ranktable th { text-align: left; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); font-weight: 700; padding: 0 8px 8px; white-space: nowrap; }
+.ranktable td { padding: 9px 8px; border-top: 1px solid rgba(237, 242, 234, .1); vertical-align: middle; }
+.ranktable .num { text-align: right; }
+.ranktable td:last-child { white-space: nowrap; }
+.rank { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; font-weight: 800; font-size: 13px; color: var(--muted); border: 1.5px solid rgba(237, 242, 234, .25); flex: none; }
+.rank.r1 { background: var(--gold); color: var(--gold-ink); border-color: transparent; }
+.rank.r2 { background: var(--silver); color: #23292c; border-color: transparent; }
+.rank.r3 { background: var(--bronze); color: #2b1a0c; border-color: transparent; }
+.botsmall { font-size: 10px; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); }
+.ratebar { display: inline-block; width: 70px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .12); overflow: hidden; vertical-align: middle; margin-right: 8px; }
+.ratebar i { display: block; height: 100%; background: var(--gold); }
+.ratepct { font-size: 14px; color: var(--muted); }
+@media (max-width: 480px) { .ratebar { display: none; } .ranktable th, .ranktable td { padding-inline: 5px; } }
+.select { font: 600 16px var(--f-body); padding: 9px 14px; border-radius: 999px; border: 1px solid var(--line); background: rgba(0, 0, 0, .25); color: var(--chalk); max-width: 100%; }
+.h2h { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.h2h-top { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 15px; margin-bottom: 4px; }
+.h2h-bar { display: flex; height: 22px; border-radius: 6px; overflow: hidden; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.h2h-bar span { display: flex; align-items: center; padding: 0 8px; min-width: 26px; }
+.h2h-bar .mine { background: var(--gold); color: var(--gold-ink); }
+.h2h-bar .theirs { background: rgba(237, 242, 234, .2); color: var(--chalk); justify-content: flex-end; }
+.recent { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.recent li { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: 1px solid rgba(237, 242, 234, .1); font-size: 15px; }
+.recent li:first-child { border-top: 0; padding-top: 0; }
+.recent .winner { color: var(--gold); }
+.scorelist li { align-items: center; }
+.scorelist .grow { flex: 1; }
+
+/* Shared screen chrome: sticky top bar with back / title / settings */
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--felt); }
+.topbar, .hud {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 6;
+  display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  padding-block: 8px; background: var(--felt);
+  border-bottom: 1px solid rgba(237, 242, 234, .08);
+}
+.topbar { grid-template-columns: 44px minmax(0, 1fr) 44px; }
+.topbar-title { margin: 0; text-align: center; font-family: var(--f-display); font-style: italic; font-weight: 800; font-size: 22px; color: var(--gold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.iconbtn { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: transparent; color: var(--chalk); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.iconbtn:hover { border-color: var(--chalk); }
+.iconbtn.tiny { width: 28px; height: 28px; }
+.iconbtn.tiny svg { width: 12px; height: 12px; }
+.screen { display: flex; flex-direction: column; gap: 22px; padding-bottom: 8px; flex: 1; }
+
+/* Home */
+.home { flex: 1; display: flex; flex-direction: column; }
+.home-top { display: flex; justify-content: flex-end; }
+.home-main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 14px; padding-block: 12px 40px; }
+.logo { font-family: var(--f-display); font-style: italic; font-weight: 800; font-size: clamp(52px, 11vw, 88px); line-height: .95; color: var(--gold); margin: 0; letter-spacing: -.5px; }
+.home-main .tagline { font-size: 17px; margin: 0; max-width: 34ch; color: var(--muted); }
+.home-actions { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 340px; margin-top: 10px; }
+.pill { margin: 0; padding: 6px 14px; border-radius: 999px; background: var(--shade); font-size: 14px; font-weight: 700; }
+.pill.mine { background: var(--gold); color: var(--gold-ink); }
+.pill.quiet { font-weight: 500; color: var(--muted); }
+.fan { position: relative; height: calc(var(--cw) * 1.4 + 34px); width: calc(var(--cw) * 4.2); }
+.fan-card { position: absolute; bottom: 0; left: calc(50% - var(--cw) / 2 + var(--i) * var(--cw) * .45); transform: rotate(calc(var(--i) * 10deg)); transform-origin: 50% 130%; }
+.fan-card .card { box-shadow: 0 6px 14px rgba(0, 0, 0, .35); }
+.btn.big { width: 100%; font-size: 17px; padding: 14px 20px; }
+.btn.danger { border-color: var(--bad); color: var(--bad); }
+.btn.danger:hover:not(:disabled) { background: rgba(255, 143, 128, .1); }
+
+/* Sala: blocks, six seat slots, sticky start bar */
+.block { display: flex; flex-direction: column; gap: 12px; }
+.block-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.block-title { margin: 0; font-size: 13px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); font-weight: 800; }
+.count { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 700; }
+.seatgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 520px) { .seatgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.slot { position: relative; min-height: 128px; border-radius: 16px; padding: 16px 10px 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; background: var(--shade); border: 1.5px solid transparent; min-width: 0; }
+.slot.me { border-color: var(--gold); }
+.slot .x { position: absolute; top: 6px; right: 6px; }
+.slot-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slot small { font-size: 11px; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); }
+.slot.empty { background: transparent; border: 1.5px dashed var(--line); color: var(--muted); font: 700 14px var(--f-body); }
+button.slot.empty { cursor: pointer; }
+button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
+.slot .plus { font-size: 28px; line-height: 1; font-weight: 400; }
+.avatar { width: 32px; height: 32px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--gold); color: var(--gold-ink); font-weight: 800; font-size: 15px; }
+.avatar.lg { width: 52px; height: 52px; font-size: 22px; }
+.avatar.bot { background: transparent; color: var(--muted); border: 1.5px dashed var(--muted); }
+.banner-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 14px; border-radius: 12px; background: var(--shade); }
+.startbar { position: sticky; bottom: 0; margin-top: auto; display: flex; flex-direction: column; gap: 6px; align-items: stretch; text-align: center; padding: 14px 0 calc(14px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(to bottom, transparent, var(--felt-lo) 35%); }
+.startbar .actions { justify-content: center; }
+
+/* Partida: players around the table */
+.hud .turnline { font-size: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hud .deck { gap: 8px; font-weight: 700; color: var(--chalk); }
+.players { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+.pchip { flex: none; display: flex; align-items: center; gap: 8px; padding: 5px 8px 5px 5px; border-radius: 999px; background: var(--shade); border: 2px solid transparent; font-size: 14px; }
+.pchip.turn { border-color: var(--gold); }
+.pchip.me .pname { font-weight: 700; }
+.pname small { color: var(--muted); }
+.pcount { min-width: 24px; height: 30px; padding: 0 5px; border-radius: 4px; display: grid; place-items: center; background: var(--card); color: var(--ink); font-weight: 800; font-size: 13px; font-variant-numeric: tabular-nums; box-shadow: 1px 1px 0 rgba(0, 0, 0, .3); }
+
+/* Popups: dimmed backdrop + sheet (bottom sheet on phones, centred card on wider screens) */
+.scrim { position: fixed; inset: 0; z-index: 30; background: rgba(4, 14, 9, .62); display: flex; align-items: center; justify-content: center; padding: calc(16px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.sheet { width: 100%; max-width: 460px; max-height: 100%; overflow: auto; background: var(--felt-hi); border: 1px solid rgba(237, 242, 234, .12); border-radius: 20px; padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 20px 50px rgba(0, 0, 0, .5); }
+@media (max-width: 520px) { .scrim { align-items: flex-end; padding-bottom: 0; } .sheet { border-radius: 20px 20px 0 0; padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); } }
+.sheet-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.sheet-title { margin: 0; font-family: var(--f-display); font-style: italic; font-weight: 800; font-size: 26px; color: var(--gold); }
+.sheet-sec { display: flex; flex-direction: column; gap: 8px; padding-top: 14px; border-top: 1px solid rgba(237, 242, 234, .1); }
+.sheet-actions { display: flex; flex-direction: column; gap: 10px; }
+.menulist { display: flex; flex-direction: column; gap: 6px; }
+.menulist button { width: 100%; text-align: left; padding: 14px 16px; border-radius: 12px; border: 0; background: var(--shade); color: var(--chalk); font: 700 16px var(--f-body); cursor: pointer; }
+.menulist button:hover { background: rgba(0, 0, 0, .3); }
+.confirm { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--bad); }
+.confirm p { margin: 0; }
+.result-title { margin: 0; font-family: var(--f-display); font-style: italic; font-weight: 800; font-size: 32px; line-height: 1.1; text-wrap: balance; }
+.standings { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.standings li { display: flex; align-items: center; gap: 10px; padding: 6px 12px 6px 6px; border-radius: 999px; background: var(--shade); }
+.standings li.win { box-shadow: 0 0 0 2px var(--gold); }
+.standings .grow { flex: 1; font-weight: 700; }
+/* What changed since your last move */
+:root { --new: #8fd3ff; }
+.card.lastplay { box-shadow: 0 0 0 2.5px var(--new), 0 0 14px rgba(143, 211, 255, .55); }
+.card.lastplay.pop { animation: landed .9s ease-out; }
+@keyframes landed { 0% { transform: translateY(-14px) scale(1.12); opacity: .2; } 60% { transform: translateY(2px) scale(1); opacity: 1; } 100% { transform: none; } }
+.meld.changed { border-color: var(--new); border-style: solid; }
+.meld .newtag { color: var(--new); }
+.activity { display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; border-radius: 14px; background: rgba(143, 211, 255, .08); border: 1px solid rgba(143, 211, 255, .3); }
+.activity.pop { animation: fadein .5s ease-out; }
+@keyframes fadein { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.activity .label { color: var(--new); }
+.activity ul, .historylist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.activity li, .historylist li { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+.activity li:last-child { font-weight: 700; }
+.activity .more { color: var(--muted); font-size: 13px; }
+.activity .avatar, .historylist .avatar { width: 26px; height: 26px; font-size: 12px; }
+.avatar.ghost { background: transparent; }
+.thinking { display: inline-flex; gap: 3px; align-items: center; }
+.thinking i { width: 5px; height: 5px; border-radius: 50%; background: var(--gold); animation: blink 1.2s infinite ease-in-out; }
+.thinking i:nth-child(2) { animation-delay: .2s; }
+.thinking i:nth-child(3) { animation-delay: .4s; }
+@keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .card.lastplay.pop, .activity.pop { animation: none; } .thinking i { animation: none; opacity: .8; } }
+
+.ruleslist { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 10px; }
+
+@media (prefers-reduced-motion: reduce) { .card, .meld .row .card + .card, .sandbar i { transition: none; } .sand svg.flip { animation: none; } }
+</style>
+
+<div class="wrap" id="app"></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+  // ---------- i18n ----------
+  const T = {
+    pt: {
+      tagline: "A mesa da família, onde quer que vocês estejam.",
+      connecting: "Arrumando a mesa…",
+      joinTitle: "Quem vai jogar?",
+      joinHelp: "Escreva seu apelido e sente-se à mesa. Faltou gente? Adicione computadores para completar. Quando todos estiverem sentados, qualquer um pode começar.",
+      nickPh: "Seu apelido (ex.: Mãe, Tio Zé)",
+      sit: "Sentar à mesa",
+      sitAnother: "Sentar mais um jogador",
+      stand: "Levantar",
+      remove: "Tirar",
+      seated: "À mesa",
+      nobody: "Ninguém sentado ainda.",
+      start: "Começar partida",
+      addBot: "+ Adicionar computador",
+      menu: "Menu",
+      thinking: "pensando",
+      sinceYou: "Desde a sua última jogada",
+      lastMoveTitle: "Última jogada",
+      moreMoves: "+ {c} jogada(s) antes",
+      newTag: "novo",
+      history: "Histórico da partida",
+      noMoves: "Nenhuma jogada ainda.",
+      botSpeed: "Velocidade dos computadores",
+      speed_slow: "Lenta",
+      speed_normal: "Normal",
+      speed_fast: "Rápida",
+      back: "Voltar",
+      settings: "Configurações",
+      close: "Fechar",
+      play: "Jogar",
+      resume: "Voltar à partida",
+      watch: "Assistir à partida",
+      nextGame: "Entrar na próxima partida",
+      inProgress: "Partida em andamento · vez de {n}",
+      tabBoardLong: "Placar da família",
+      howTo: "Como jogar",
+      lobbyTitle: "Montar a mesa",
+      yourName: "Seu apelido",
+      players: "Jogadores",
+      personTag: "jogador",
+      addBotShort: "Computador",
+      freeSeat: "Lugar vago",
+      waitingList: "Na espera",
+      inviteHint: "Para jogar com a família, convide cada um pelo botão Compartilhar, como Editor. Faltou gente? Toque num lugar vago para adicionar um computador.",
+      botHint: "Toque num lugar vago para adicionar um computador.",
+      options: "Opções da partida",
+      gameOver: "Fim de partida",
+      wentOut: "bateu",
+      mainMenu: "Menu inicial",
+      continue: "Continuar jogando",
+      language: "Idioma",
+      sortLabel: "Ordenar cartas",
+      timerHelp: "Vale para todos na mesa. Pode mudar a qualquer momento.",
+      tabsLabel: "Seções",
+      tabTable: "Mesa",
+      tabGame: "Partida",
+      tabBoard: "Placar",
+      boardTitle: "Placar da Família",
+      boardCount: "{c} partida(s) jogadas desde {d}",
+      boardEmpty: "Quem vai ser o campeão da família?",
+      boardNone: "Ainda não tem partidas no placar. Termine uma partida e ela aparece aqui.",
+      withBots: "Com robôs",
+      peopleOnly: "Só pessoas",
+      ranking: "Ranking",
+      player: "Jogador",
+      played: "Partidas",
+      wonCol: "Vitórias",
+      winRate: "Aproveitamento",
+      vsTitle: "Frente a frente",
+      together: "{c} partida(s) juntos",
+      vsNone: "Ainda não jogou com ninguém.",
+      recent: "Últimas partidas",
+      winsOf: "{w} de {p}",
+      seeBoard: "Ver placar completo",
+      backYourTurn: "Sua vez! Voltar para a partida",
+      reset: "Zerar placar",
+      resetAsk: "Apagar todas as partidas do placar? Não dá para desfazer.",
+      resetYes: "Sim, zerar",
+      menuTitle: "Bora jogar?",
+      menuSub: "Mexe-Mexe com as regras da nossa família: 9 cartas, o 2 é coringa e quem mexe e não consegue compra 3.",
+      lastGame: "Última partida",
+      seeTable: "Ver mesa final",
+      sandTimer: "Ampulheta",
+      off: "Desligada",
+      timeUp: "Tempo esgotado! Você comprou carta.",
+      lg_timeout: "{n} demorou e comprou {c} carta(s).",
+      r7: "Ampulheta (opcional): se a família combinar, ligue a ampulheta de 30, 60 ou 90 segundos por vez. Se o tempo acabar, a jogada é desfeita e a pessoa compra uma carta (ou 3, se mexeu na mesa).",
+      botTag: "computador",
+      needTwo: "Precisa de pelo menos 2 jogadores.",
+      maxSix: "Máximo de 6 jogadores; os primeiros 6 jogam.",
+      yourTurn: "Sua vez!",
+      turnOf: "Vez de {n}",
+      deck: "{c} no monte",
+      table: "Mesa",
+      emptyTable: "Nenhum jogo na mesa ainda. Baixe uma trinca ou uma sequência de 3 cartas.",
+      hand: "Sua mão",
+      handOf: "Mão de {n}",
+      buy: "Comprar e passar",
+      pass: "Passar a vez",
+      confirm: "Confirmar jogada",
+      undo: "Desfazer",
+      newMeld: "+ Novo jogo",
+      placeHere: "Colocar aqui",
+      backToHand: "Voltar para a mão",
+      invalid: "Jogo inválido",
+      hintPick: "Toque nas cartas para escolher. Depois toque em “Colocar aqui” ou “+ Novo jogo”.",
+      hintNeedPlay: "Baixe pelo menos uma carta da sua mão, ou compre e passe.",
+      hintFix: "Arrume os jogos marcados em vermelho para confirmar.",
+      hintLimit: "Por vez, baixe só 1 carta, ou um jogo novo com exatamente 3 cartas da mão.",
+      hintPenalty: "Você mexeu na mesa: se não conseguir jogar, vai comprar 3 cartas.",
+      buy3: "Comprar 3 e passar",
+      mexendo: "{n} está mexendo na mesa…",
+      lg_bought3: "{n} mexeu, não conseguiu e comprou {c} cartas.",
+      hintReady: "Tudo certo! Confirme a jogada.",
+      hintBuyUndo: "Para comprar, desfaça suas mudanças primeiro.",
+      waiting: "Esperando {n} jogar…",
+      tableStays: "Cartas que estavam na mesa não voltam para a mão.",
+      sortSuit: "Por naipe",
+      sortRank: "Por número",
+      won: "{n} bateu!",
+      wonMany: "Empate: {n}",
+      aborted: "Partida encerrada.",
+      deckOut: "O monte acabou e ninguém conseguiu jogar. Vence quem ficou com menos cartas.",
+      playAgain: "Jogar de novo",
+      endGame: "Encerrar partida",
+      endAsk: "Encerrar a partida? As cartas de todos serão perdidas.",
+      endYes: "Sim, encerrar",
+      endNo: "Continuar jogando",
+      scores: "Placar da família",
+      wins: "{c} vitória(s)",
+      cardsLeft: "{c} carta(s)",
+      spectator: "Tem uma partida em andamento. Sente-se à mesa e você entra na próxima.",
+      readOnly: "Você está só olhando. Para jogar, peça para quem criou a mesa te convidar como Editor.",
+      localMode: "Modo local: jogadores se revezam no mesmo aparelho. No link publicado, cada um joga do seu.",
+      cover: "Vez de {n}",
+      coverHelp: "Passe o aparelho para {n}. Os outros não olham!",
+      reveal: "Sou {n}, mostrar minhas cartas",
+      saveFail: "Não deu para salvar. Confira a internet e tente de novo.",
+      rules: "Regras do Mexe-Mexe",
+      r1: "Dois baralhos, sem coringas. Cada jogador recebe 9 cartas.",
+      r2: "Jogos têm 3 ou mais cartas: trinca (mesmo número, naipes diferentes, até 4 cartas) ou sequência (mesmo naipe, em ordem; o Ás vale antes do 2 ou depois do K).",
+      r2b: "O 2 é coringa na sequência: ocupa o lugar de qualquer carta (ex.: 2, 4♥, 5♥). Cada sequência pode ter só um 2 (seja coringa ou 2 normal), e o coringa nunca entra em trinca. Trinca de 2 (ex.: 2♠ 2♥ 2♣) vale normalmente.",
+      r3: "Na sua vez, baixe um jogo novo com exatamente 3 cartas da mão, OU só 1 carta. Pode mexer em tudo que está na mesa (separar, juntar, reorganizar), desde que no fim todos os jogos fiquem válidos.",
+      r3b: "Pode separar qualquer jogo da mesa, mesmo uma sequência de Ás a Ás, para formar outros jogos e encaixar sua carta. Toque nas cartas que quer tirar e depois em “+ Novo jogo” ou “Colocar aqui”.",
+      r4: "Cartas da mesa não voltam para a mão.",
+      r5: "Se não baixar nada, compre uma carta e passe a vez. Mas se você mexeu nos jogos da mesa e não conseguiu jogar, desfaz tudo e compra 3 cartas.",
+      r6: "Quem ficar sem cartas primeiro bate e vence. Se o monte acabar e ninguém conseguir jogar, vence quem tiver menos cartas.",
+      lg_started: "Nova partida! {n} começa.",
+      lg_played: "{n} baixou {c} carta(s).",
+      lg_bought: "{n} comprou uma carta.",
+      lg_passed: "{n} passou a vez.",
+      lg_won: "{n} bateu!",
+      lg_aborted: "{n} encerrou a partida.",
+      lg_deckOut: "Monte acabou."
+    },
+    en: {
+      tagline: "The family table, wherever you are.",
+      connecting: "Setting the table…",
+      joinTitle: "Who's playing?",
+      joinHelp: "Type your nickname and take a seat. Short on players? Add computers to fill the table. Once everyone is seated, anyone can start.",
+      nickPh: "Your nickname (e.g. Mom, Uncle Zé)",
+      sit: "Take a seat",
+      sitAnother: "Seat another player",
+      stand: "Leave seat",
+      remove: "Remove",
+      seated: "At the table",
+      nobody: "Nobody seated yet.",
+      start: "Start game",
+      addBot: "+ Add computer",
+      menu: "Menu",
+      thinking: "thinking",
+      sinceYou: "Since your last move",
+      lastMoveTitle: "Last move",
+      moreMoves: "+ {c} earlier move(s)",
+      newTag: "new",
+      history: "Game history",
+      noMoves: "No moves yet.",
+      botSpeed: "Computer speed",
+      speed_slow: "Slow",
+      speed_normal: "Normal",
+      speed_fast: "Fast",
+      back: "Back",
+      settings: "Settings",
+      close: "Close",
+      play: "Play",
+      resume: "Back to the game",
+      watch: "Watch the game",
+      nextGame: "Join the next game",
+      inProgress: "Game in progress · {n}'s turn",
+      tabBoardLong: "Family scoreboard",
+      howTo: "How to play",
+      lobbyTitle: "Set the table",
+      yourName: "Your nickname",
+      players: "Players",
+      personTag: "player",
+      addBotShort: "Computer",
+      freeSeat: "Empty seat",
+      waitingList: "Waiting",
+      inviteHint: "To play with family, invite each person with the Share button, as an Editor. Short on players? Tap an empty seat to add a computer.",
+      botHint: "Tap an empty seat to add a computer.",
+      options: "Game options",
+      gameOver: "Game over",
+      wentOut: "went out",
+      mainMenu: "Main menu",
+      continue: "Keep playing",
+      language: "Language",
+      sortLabel: "Sort cards",
+      timerHelp: "Applies to everyone at the table. You can change it any time.",
+      tabsLabel: "Sections",
+      tabTable: "Table",
+      tabGame: "Game",
+      tabBoard: "Scoreboard",
+      boardTitle: "Family Scoreboard",
+      boardCount: "{c} game(s) played since {d}",
+      boardEmpty: "Who will be the family champion?",
+      boardNone: "No games on the scoreboard yet. Finish a game and it shows up here.",
+      withBots: "With robots",
+      peopleOnly: "People only",
+      ranking: "Ranking",
+      player: "Player",
+      played: "Games",
+      wonCol: "Wins",
+      winRate: "Win rate",
+      vsTitle: "Head to head",
+      together: "{c} game(s) together",
+      vsNone: "Hasn't played with anyone yet.",
+      recent: "Recent games",
+      winsOf: "{w} of {p}",
+      seeBoard: "See full scoreboard",
+      backYourTurn: "Your turn! Back to the game",
+      reset: "Reset scoreboard",
+      resetAsk: "Erase every game from the scoreboard? This can't be undone.",
+      resetYes: "Yes, reset",
+      menuTitle: "Shall we play?",
+      menuSub: "Mexe-Mexe with our family's rules: 9 cards, the 2 is a joker, and if you touch the table and can't play, you draw 3.",
+      lastGame: "Last game",
+      seeTable: "See final table",
+      sandTimer: "Sand timer",
+      off: "Off",
+      timeUp: "Time's up! You drew a card.",
+      lg_timeout: "{n} ran out of time and drew {c} card(s).",
+      r7: "Sand timer (optional): if the family agrees, turn on a 30, 60 or 90 second timer per turn. When time runs out, the move is undone and the player draws a card (or 3 if they touched the table).",
+      botTag: "computer",
+      needTwo: "You need at least 2 players.",
+      maxSix: "Up to 6 players; the first 6 play.",
+      yourTurn: "Your turn!",
+      turnOf: "{n}'s turn",
+      deck: "{c} in the deck",
+      table: "Table",
+      emptyTable: "No melds on the table yet. Lay down a set or a run of 3 cards.",
+      hand: "Your hand",
+      handOf: "{n}'s hand",
+      buy: "Draw and pass",
+      pass: "Pass",
+      confirm: "Confirm play",
+      undo: "Undo",
+      newMeld: "+ New meld",
+      placeHere: "Place here",
+      backToHand: "Back to hand",
+      invalid: "Invalid meld",
+      hintPick: "Tap cards to pick them, then tap “Place here” or “+ New meld”.",
+      hintNeedPlay: "Lay down at least one card from your hand, or draw and pass.",
+      hintFix: "Fix the melds marked in red to confirm.",
+      hintLimit: "Each turn, lay down just 1 card, or a new meld of exactly 3 cards from your hand.",
+      hintPenalty: "You touched the table: if you can't play, you'll draw 3 cards.",
+      buy3: "Draw 3 and pass",
+      mexendo: "{n} is rearranging the table…",
+      lg_bought3: "{n} rearranged, couldn't play and drew {c} cards.",
+      hintReady: "All good! Confirm your play.",
+      hintBuyUndo: "To draw, undo your changes first.",
+      waiting: "Waiting for {n} to play…",
+      tableStays: "Cards that were on the table can't go back to your hand.",
+      sortSuit: "By suit",
+      sortRank: "By number",
+      won: "{n} went out!",
+      wonMany: "Tie: {n}",
+      aborted: "Game ended.",
+      deckOut: "The deck ran out and nobody could play. Fewest cards wins.",
+      playAgain: "Play again",
+      endGame: "End game",
+      endAsk: "End this game? Everyone's cards will be lost.",
+      endYes: "Yes, end it",
+      endNo: "Keep playing",
+      scores: "Family scoreboard",
+      wins: "{c} win(s)",
+      cardsLeft: "{c} card(s)",
+      spectator: "A game is in progress. Take a seat and you'll join the next one.",
+      readOnly: "You're watching only. To play, ask whoever made this table to invite you as an Editor.",
+      localMode: "Local mode: players take turns on the same device. On the published link, everyone plays from their own.",
+      cover: "{n}'s turn",
+      coverHelp: "Pass the device to {n}. No peeking, everyone else!",
+      reveal: "I'm {n}, show my cards",
+      saveFail: "Couldn't save. Check your connection and try again.",
+      rules: "How to play Mexe-Mexe",
+      r1: "Two decks, no jokers. Each player gets 9 cards.",
+      r2: "Melds have 3 or more cards: a set (same number, different suits, up to 4 cards) or a run (same suit, in order; the Ace goes before the 2 or after the K).",
+      r2b: "A 2 is a joker in runs: it takes the place of any card (e.g. 2, 4♥, 5♥). Each run can hold only one 2 (joker or plain 2), and a joker never goes in a set. A set of 2s (e.g. 2♠ 2♥ 2♣) is fine.",
+      r3: "On your turn, lay down a new meld of exactly 3 cards from your hand, OR just 1 card. You can rearrange anything on the table (split, join, reshuffle), as long as every meld is valid at the end.",
+      r3b: "You can split any meld on the table, even an Ace-to-Ace run, to build other melds and fit your card in. Tap the cards you want to take out, then “+ New meld” or “Place here”.",
+      r4: "Cards on the table never go back to a hand.",
+      r5: "If you don't lay anything down, draw one card and pass. But if you moved cards that were already on the table and couldn't play, put everything back and draw 3 cards.",
+      r6: "The first player with no cards goes out and wins. If the deck runs out and nobody can play, the fewest cards wins.",
+      lg_started: "New game! {n} starts.",
+      lg_played: "{n} laid down {c} card(s).",
+      lg_bought: "{n} drew a card.",
+      lg_passed: "{n} passed.",
+      lg_won: "{n} went out!",
+      lg_aborted: "{n} ended the game.",
+      lg_deckOut: "The deck ran out."
+    }
+  };
+
+  const ls = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  };
+  let lang = ls.get("mm-lang") === "en" ? "en" : "pt";
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  function t(k, vars) {
+    let s = T[lang][k] ?? T.pt[k] ?? k;
+    if (vars) for (const [a, b] of Object.entries(vars)) s = s.split("{" + a + "}").join(esc(b));
+    return s;
+  }
+
+  // ---------- cards & rules ----------
+  const SUITS = ["S", "H", "D", "C"];
+  const SYM = { S: "♠", H: "♥", D: "♦", C: "♣" };
+  const SUIT_ORDER = { S: 0, H: 1, C: 2, D: 3 };
+  const RL = (r) => ({ 1: "A", 11: "J", 12: "Q", 13: "K" }[r] || String(r));
+  function parse(id) { const m = /^(\d+)([SHDC])(\d)$/.exec(id); return { r: +m[1], s: m[2] }; }
+  function newDeck() {
+    const d = [];
+    for (let c = 0; c < 2; c++) for (const s of SUITS) for (let r = 1; r <= 13; r++) d.push(`${r}${s}${c}`);
+    for (let i = d.length - 1; i > 0; i--) {
+      const buf = new Uint32Array(1); crypto.getRandomValues(buf);
+      const j = buf[0] % (i + 1); [d[i], d[j]] = [d[j], d[i]];
+    }
+    return d;
+  }
+  // A run of natural cards (same suit, distinct, consecutive) plus at most one wild 2
+  // filling a gap or extending an end. Ace counts low (A-2-3) or high (Q-K-A); with two Aces,
+  // one can be low and the other high (A-2-3 … Q-K-A). Returns the ordered ids or null.
+  function runOrder(natural, wild) {
+    if (!natural.length || !natural.every((id) => parse(id).s === parse(natural[0]).s)) return null;
+    const aces = natural.filter((id) => parse(id).r === 1);
+    for (const mode of ["low", "high", "split"]) {
+      if (mode === "split" && aces.length !== 2) continue;
+      const val = (id) => {
+        const r = parse(id).r;
+        if (r !== 1) return r;
+        return mode === "high" || (mode === "split" && id === aces[1]) ? 14 : 1;
+      };
+      const nat = [...natural].sort((a, b) => val(a) - val(b));
+      const vs = nat.map(val);
+      if (new Set(vs).size !== vs.length) continue;
+      const gaps = vs[vs.length - 1] - vs[0] + 1 - vs.length;
+      if (!wild && gaps === 0) return nat;
+      if (wild && gaps === 1) {
+        const i = vs.findIndex((v, k) => k > 0 && v !== vs[k - 1] + 1);
+        return [...nat.slice(0, i), wild, ...nat.slice(i)];
+      }
+      if (wild && gaps === 0) return vs[0] > 1 ? [wild, ...nat] : [...nat, wild];
+    }
+    return null;
+  }
+  // Valid meld → ids in display order; invalid → null.
+  function meldOrder(ids) {
+    if (ids.length < 3) return null;
+    const cs = ids.map(parse);
+    // Sets (trincas): same number, different suits, up to 4. A trinca of 2s (2♠ 2♥ 2♣) counts too.
+    if (cs.every((c) => c.r === cs[0].r)) {
+      const suits = new Set(cs.map((c) => c.s));
+      return ids.length <= 4 && suits.size === ids.length ? [...ids].sort((a, b) => SUIT_ORDER[parse(a).s] - SUIT_ORDER[parse(b).s]) : null;
+    }
+    // House rule for runs: never more than one 2, whether it plays as a joker or as a plain 2.
+    if (ids.filter((id) => parse(id).r === 2).length > 1) return null;
+    if (ids.length > 14) return null;
+    const natural = runOrder(ids, null);
+    if (natural) return natural;
+    for (const w of ids.filter((id) => parse(id).r === 2)) {
+      const order = runOrder(ids.filter((id) => id !== w), w);
+      if (order) return order;
+    }
+    return null;
+  }
+  const meldType = (ids) => !!meldOrder(ids);
+  const sortMeld = (ids) => meldOrder(ids) || ids;
+  function sortHand(ids, mode) {
+    return [...ids].sort((a, b) => {
+      const x = parse(a), y = parse(b);
+      return mode === "rank" ? x.r - y.r || SUIT_ORDER[x.s] - SUIT_ORDER[y.s] : SUIT_ORDER[x.s] - SUIT_ORDER[y.s] || x.r - y.r;
+    });
+  }
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const meldKey = (m) => [...m].sort().join(",");
+  const safeId = (s) => String(s).replace(/[^A-Za-z0-9_\-.~:@+]/g, "_").slice(0, 120) || "p";
+  const randId = () => "p" + Math.random().toString(36).slice(2, 10);
+
+  // ---------- stores ----------
+  function makeDbStore(db) {
+    const gref = db.doc("games/current");
+    const lcol = db.collection("lobby");
+    const sref = db.doc("settings/table");
+    const tref = db.doc("stats/family");
+    return {
+      subGame(cb) { return gref.onSnapshot((s) => cb(s.exists ? s.data() : null), onStoreError); },
+      subLobby(cb) { return lcol.onSnapshot((q) => cb(q.docs.map((d) => ({ id: d.id, ...d.data() }))), onStoreError); },
+      setGame(g) { return gref.set(g); },
+      updateGame(p) { return gref.update(p); },
+      setSeat(id, d) { return lcol.doc(id).set(d); },
+      delSeat(id) { return lcol.doc(id).delete(); },
+      subSettings(cb) { return sref.onSnapshot((s) => cb(s.exists ? s.data() : {}), onStoreError); },
+      setSettings(d) { return sref.set(d); },
+      subStats(cb) { return tref.onSnapshot((s) => cb(s.exists ? s.data() : {}), onStoreError); },
+      setStats(d) { return tref.set(d); }
+    };
+  }
+  function makeLocalStore() {
+    let data = { game: null, lobby: {} };
+    try { const raw = ls.get("mm-local"); if (raw) data = JSON.parse(raw); } catch (e) {}
+    data.settings = data.settings || {};
+    data.stats = data.stats || {};
+    const gl = [], ll = [], sl = [], tl = [];
+    const save = () => ls.set("mm-local", JSON.stringify(data));
+    const lobbyList = () => Object.entries(data.lobby).map(([id, v]) => ({ id, ...v }));
+    return {
+      subGame(cb) { gl.push(cb); setTimeout(() => cb(data.game)); return () => {}; },
+      subLobby(cb) { ll.push(cb); setTimeout(() => cb(lobbyList())); return () => {}; },
+      async setGame(g) { data.game = clone(g); save(); gl.forEach((f) => f(data.game)); },
+      async setSeat(id, d) { data.lobby[id] = d; save(); ll.forEach((f) => f(lobbyList())); },
+      async delSeat(id) { delete data.lobby[id]; save(); ll.forEach((f) => f(lobbyList())); },
+      async updateGame(p) { Object.assign(data.game, p); save(); gl.forEach((f) => f(data.game)); },
+      subSettings(cb) { sl.push(cb); setTimeout(() => cb(data.settings)); return () => {}; },
+      async setSettings(d) { data.settings = d; save(); sl.forEach((f) => f(data.settings)); },
+      subStats(cb) { tl.push(cb); setTimeout(() => cb(data.stats)); return () => {}; },
+      async setStats(d) { data.stats = d; save(); tl.forEach((f) => f(data.stats)); }
+    };
+  }
+  function onStoreError(e) {
+    if (e && e.code === "revoked") { canWrite = false; render(); }
+  }
+
+  // ---------- state ----------
+  let store = null, mode = "connecting", myId = null, canWrite = true;
+  let game = null, lobby = [], settings = {}, stats = {};
+  // Navigation: one screen at a time (home | lobby | board | game), plus at most one popup
+  // (menu | settings | rules). resultsSeen remembers which finished game's results were dismissed.
+  let screen = "home", modal = null, resultsSeen = null, vsKey = null, askReset = false;
+  let boardBots = ls.get("mm-board-bots") !== "no";
+  // Sand timer: each device times the turn from when it saw the turn begin (device clocks in
+  // Canada and Brazil can disagree), keyed so a new turn or a timer change flips it.
+  let clockKey = null, clockStart = 0, timeoutFired = null, justFlipped = false;
+  let ws = null;               // my working copy during my turn
+  const sel = new Set();
+  let sortMode = ls.get("mm-sort") === "rank" ? "rank" : "suit";
+  let askEnd = false, busy = false, revealedSeq = null;
+  let audioOk = false, toastTimer = null;
+
+  function meId() {
+    if (mode === "local" && game && game.status === "playing") {
+      const cur = game.players[game.turn];
+      return cur.bot ? lastHuman() : cur.uid;
+    }
+    return myId;
+  }
+  // The person seated just before the current player. Their device runs a computer's turn,
+  // and in local mode their hand stays on screen while the computer plays.
+  function lastHuman() {
+    const n = game.players.length;
+    for (let k = 1; k <= n; k++) { const p = game.players[(game.turn - k + n) % n]; if (!p.bot) return p.uid; }
+    return null;
+  }
+  const humanCount = () => game.players.filter((p) => !p.bot).length;
+  const nickOf = (uid) => (game?.players.find((p) => p.uid === uid)?.nick) || (lobby.find((s) => s.id === uid)?.nick) || "?";
+  const isMyTurn = () => game?.status === "playing" && game.players[game.turn].uid === meId();
+  const amInGame = () => !!game?.players.some((p) => p.uid === meId());
+
+  function buildWs() {
+    const hand = [...(game.hands[meId()] || [])];
+    ws = { seq: game.seq, table: game.table.map((m) => [...m]), hand, orig: new Set(hand) };
+    sel.clear();
+  }
+  function wsStatus() {
+    const played = ws.orig.size - ws.hand.length;
+    const bad = ws.table.map((m, i) => (meldType(m) ? -1 : i)).filter((i) => i >= 0);
+    const changed = played > 0 || JSON.stringify(ws.table) !== JSON.stringify(game.table);
+    // House rule: one card from the hand, or a brand-new meld of exactly three hand cards.
+    const newThree = played === 3 && ws.table.some((m) => m.length === 3 && m.every((id) => ws.orig.has(id)));
+    const countOk = played === 1 || newThree;
+    return { played, bad, changed, countOk, ok: countOk && bad.length === 0 };
+  }
+
+  function onGame(g) {
+    const prevSeq = game?.seq, prevTurnUid = game?.status === "playing" ? game.players[game.turn].uid : null;
+    const prevStatus = game?.status;
+    const prevSnap = game ? snapTable(game) : null;
+    game = g ? clone(g) : null;
+    trackChanges(prevSeq, prevSnap);
+    // A game that starts (or is already running when you arrive) takes its players straight to the table.
+    if (game?.status === "playing" && prevStatus !== "playing" && (mode === "local" || amInGame())) { screen = "game"; modal = null; }
+    if (isMyTurn()) {
+      if (!ws || ws.seq !== game.seq) buildWs();
+      if (mode === "online" && prevSeq !== game.seq && prevTurnUid !== myId) chime();
+    } else { ws = null; sel.clear(); }
+    if (game?.status !== "playing") askEnd = false;
+    const key = game ? `${game.seq}:${game.timer || 0}:${game.timerAt || 0}` : null;
+    if (key !== clockKey) { clockKey = key; clockStart = Date.now(); justFlipped = !!game?.timer; }
+    document.title = isMyTurn() && mode === "online" ? "● " + t("yourTurn") + " · Mexe-Mexe" : "Mexe-Mexe da Família";
+    render();
+    maybeRunBot();
+  }
+
+  // ---------- what changed since your last move ----------
+  // baseline = the table right after your own last move (or at game start). Anything on the table
+  // that isn't in it was put there by someone else while you waited, and gets highlighted.
+  let baseline = null, baseGameId = null, meldBy = {}, justMoved = false;
+  const snapTable = (g) => ({ seq: g.seq, cards: new Set(g.table.flat()), melds: new Set(g.table.map(meldKey)) });
+  function trackChanges(prevSeq, prevSnap) {
+    if (!game || !game.players) return;
+    const gid = game.id || "s";
+    if (gid !== baseGameId) { baseGameId = gid; baseline = snapTable(game); meldBy = {}; return; }
+    const lm = game.lastMove;
+    if (!lm || lm.seq !== game.seq || prevSeq === game.seq) return;
+    justMoved = true;
+    (lm.melds || []).forEach((k) => { meldBy[k] = nickOf(lm.by); });
+    const mover = game.players.find((p) => p.uid === lm.by);
+    const mine = mode === "local" ? mover && !mover.bot : lm.by === myId;
+    if (mine) baseline = snapTable(game);
+    else if (mode === "online" && !amInGame() && prevSnap) baseline = prevSnap;   // spectators just see the latest move
+  }
+  const isNewCard = (id) => !!baseline && !baseline.cards.has(id);
+  const isChangedMeld = (m) => !!baseline && !baseline.melds.has(meldKey(m));
+
+  // ---------- actions ----------
+  async function commit(g) {
+    busy = true; render();
+    try {
+      await store.setGame(g);
+      if (g.status === "over" && !g.aborted) await recordGame(g);
+    }
+    catch (e) { toast(t("saveFail")); if (e && e.code === "invalid_argument") { canWrite = false; } }
+    busy = false; render();
+  }
+  // Each entry remembers the move number (s) so we can show "everything since your last move".
+  function pushLog(g, entry) { g.log = [{ ...entry, s: g.seq }, ...(g.log || [])].slice(0, 30); }
+
+  function startGame() {
+    const seats = lobby.slice(0, 6);
+    if (seats.length < 2) return;
+    const deck = newDeck();
+    const players = seats.map((s) => ({ uid: s.id, nick: s.nick, ...(s.bot ? { bot: true } : {}) }));
+    const hands = {};
+    players.forEach((p) => { hands[p.uid] = deck.splice(0, 9); });
+    const starter = game && Number.isInteger(game.starter) ? (game.starter + 1) % players.length : 0;
+    const g = { id: Date.now().toString(36) + randId(), status: "playing", players, hands, deck, table: [], turn: starter, starter, seq: (game?.seq || 0) + 1, passStreak: 0, winners: [], scores: game?.scores || {}, log: [], ts: Date.now(), timer: settings.timer || 0, timerAt: Date.now() };
+    pushLog(g, { k: "started", n: players[starter].nick });
+    revealedSeq = null;
+    commit(g);
+  }
+  function nextTurn(g) { g.turn = (g.turn + 1) % g.players.length; }
+
+  function applyPlay(g, me, table, hand, played) {
+    const before = new Set(g.table.map(meldKey));
+    const oldHand = g.hands[me] || [];
+    g.table = table.map(sortMeld);
+    g.hands[me] = [...hand];
+    g.passStreak = 0; g.seq++; g.ts = Date.now(); g.touched = false;
+    // What this move changed, so everyone can see it: the cards laid down and the melds that are new or rearranged.
+    g.lastMove = { by: me, seq: g.seq, cards: oldHand.filter((id) => !hand.includes(id)), melds: g.table.map(meldKey).filter((k) => !before.has(k)) };
+    pushLog(g, { k: "played", n: nickOf(me), c: played });
+    if (hand.length === 0) {
+      g.status = "over"; g.winners = [me]; g.scores[me] = (g.scores[me] || 0) + 1;
+      pushLog(g, { k: "won", n: nickOf(me) });
+    } else nextTurn(g);
+    return g;
+  }
+  function confirmPlay() {
+    if (!ws || busy) return;
+    const st = wsStatus(); if (!st.ok) return;
+    const g = applyPlay(clone(game), meId(), ws.table, ws.hand, st.played);
+    ws = null; sel.clear();
+    commit(g);
+  }
+  function drawAndPass() {
+    if (!isMyTurn() || busy) return;
+    const g = applyDraw(clone(game), meId());
+    ws = null; sel.clear();
+    commit(g);
+  }
+  function applyDraw(g, me) {
+    g.seq++; g.ts = Date.now();
+    g.lastMove = { by: me, seq: g.seq };
+    const penalty = !!g.touched;
+    g.touched = false;
+    if (g.deck.length) {
+      const n = Math.min(penalty ? 3 : 1, g.deck.length);
+      for (let i = 0; i < n; i++) g.hands[me].push(g.deck.pop());
+      g.passStreak = 0;
+      pushLog(g, penalty ? { k: "bought3", n: nickOf(me), c: n } : { k: "bought", n: nickOf(me) });
+    } else {
+      g.passStreak = (g.passStreak || 0) + 1;
+      pushLog(g, { k: "passed", n: nickOf(me) });
+      if (g.passStreak >= g.players.length) {
+        const min = Math.min(...g.players.map((p) => g.hands[p.uid].length));
+        g.winners = g.players.filter((p) => g.hands[p.uid].length === min).map((p) => p.uid);
+        g.winners.forEach((u) => { g.scores[u] = (g.scores[u] || 0) + 1; });
+        g.status = "over"; g.deckOut = true;
+        pushLog(g, { k: "deckOut" });
+      }
+    }
+    if (g.status === "playing") nextTurn(g);
+    return g;
+  }
+
+  // ---------- computer players ----------
+  // Same house rules as people: a new meld of exactly 3 hand cards, or one card
+  // (added to a meld, or slotted in by splitting a run). Joker 2s are spent last. Otherwise draw.
+  function botMove(g, uid) {
+    const hand = sortHand(g.hands[uid], "rank").sort((a, b) => (parse(a).r === 2) - (parse(b).r === 2));
+    for (let i = 0; i < hand.length; i++) for (let j = i + 1; j < hand.length; j++) for (let k = j + 1; k < hand.length; k++) {
+      const m = [hand[i], hand[j], hand[k]];
+      if (meldOrder(m)) return applyPlay(g, uid, [...g.table, m], hand.filter((id) => !m.includes(id)), 3);
+    }
+    for (const card of hand) {
+      const rest = hand.filter((id) => id !== card);
+      for (let mi = 0; mi < g.table.length; mi++) {
+        const m = g.table[mi];
+        const swap = (...ms) => [...g.table.slice(0, mi), ...ms, ...g.table.slice(mi + 1)];
+        if (meldOrder([...m, card])) return applyPlay(g, uid, swap([...m, card]), rest, 1);
+        for (let k = 1; k < m.length; k++) {
+          const left = m.slice(0, k), right = m.slice(k);
+          if (meldOrder([...left, card]) && meldOrder(right)) return applyPlay(g, uid, swap([...left, card], right), rest, 1);
+          if (meldOrder(left) && meldOrder([card, ...right])) return applyPlay(g, uid, swap(left, [card, ...right]), rest, 1);
+        }
+      }
+    }
+    return applyDraw(g, uid);
+  }
+  let botTimer = null;
+  // How long a computer "thinks" before playing, so people can follow along. Shared table setting.
+  const BOT_SPEEDS = { slow: 4500, normal: 2800, fast: 1200 };
+  const botDelay = () => BOT_SPEEDS[settings.botSpeed] || BOT_SPEEDS.normal;
+  function botSpeedControl() {
+    if (!canWrite) return "";
+    const cur = BOT_SPEEDS[settings.botSpeed] ? settings.botSpeed : "normal";
+    return `<div class="timerctl"><span class="label">${t("botSpeed")}</span><div class="seg" role="group" aria-label="${esc(t("botSpeed"))}">${["slow", "normal", "fast"].map((k) => `<button data-act="botspeed" data-v="${k}" aria-pressed="${cur === k}">${t("speed_" + k)}</button>`).join("")}</div></div>`;
+  }
+  function maybeRunBot() {
+    clearTimeout(botTimer);
+    if (!game || game.status !== "playing" || !canWrite || !store) return;
+    const cur = game.players[game.turn];
+    if (!cur.bot) return;
+    // The person who played just before runs it; if they've left, anyone at the table takes over.
+    const runner = mode === "local" || lastHuman() === myId;
+    if (!runner && !amInGame()) return;
+    const seq = game.seq;
+    botTimer = setTimeout(() => {
+      if (!game || game.seq !== seq) return;
+      if (busy) return maybeRunBot();
+      commit(botMove(clone(game), cur.uid));
+    }, runner ? botDelay() : botDelay() + 8000);
+  }
+  const BOT_NAMES = ["Tião", "Cida", "Juca", "Nina", "Bento", "Zuzu"];
+  async function addBot() {
+    if (lobby.length >= 6) return;
+    const used = new Set(lobby.map((s) => s.nick));
+    const nick = BOT_NAMES.map((n) => "Robô " + n).find((n) => !used.has(n)) || "Robô " + (lobby.length + 1);
+    try { await store.setSeat("bot-" + randId(), { nick, bot: true, joinedAt: Date.now() }); }
+    catch (e) { toast(t("saveFail")); }
+  }
+
+  // ---------- family leaderboard ----------
+  // Every finished game is kept in one shared history (newest first). People are keyed by
+  // nickname, so "Mãe" keeps her record across devices as long as she sits as "Mãe".
+  const nickKey = (nick) => String(nick).trim().toLowerCase();
+  async function recordGame(g) {
+    const id = g.id || `s${g.seq}-${g.players.map((p) => p.uid).join(".")}`;
+    const hist = (stats.history || []).slice();
+    if (hist.some((h) => h.id === id)) return;
+    const keyOf = (uid) => nickKey(g.players.find((p) => p.uid === uid)?.nick || "?");
+    hist.unshift({
+      id, ts: Date.now(),
+      players: g.players.map((p) => ({ k: nickKey(p.nick), nick: p.nick, uid: p.uid, ...(p.bot ? { bot: true } : {}) })),
+      winners: (g.winners || []).map(keyOf)
+    });
+    await store.setStats({ ...stats, history: hist.slice(0, 300) });
+  }
+  const historyList = () => stats.history || [];
+  function leaderboard() {
+    const rows = {};
+    for (const h of historyList()) for (const p of h.players) {
+      if (p.bot && !boardBots) continue;
+      const r = rows[p.k] || (rows[p.k] = { k: p.k, nick: p.nick, bot: !!p.bot, played: 0, wins: 0 });
+      r.played++;
+      if (h.winners.includes(p.k)) r.wins++;
+    }
+    return Object.values(rows).sort((a, b) => b.wins - a.wins || b.wins / b.played - a.wins / a.played || b.played - a.played);
+  }
+  function myKey() {
+    if (mode === "local") return null;
+    for (const h of historyList()) { const p = h.players.find((x) => x.uid === myId); if (p) return p.k; }
+    const seat = lobby.find((s) => s.id === myId);
+    return seat ? nickKey(seat.nick) : null;
+  }
+  function headToHead(k) {
+    const rows = {};
+    for (const h of historyList()) {
+      if (!h.players.some((p) => p.k === k)) continue;
+      for (const p of h.players) {
+        if (p.k === k || (p.bot && !boardBots)) continue;
+        const r = rows[p.k] || (rows[p.k] = { k: p.k, nick: p.nick, bot: !!p.bot, together: 0, mine: 0, theirs: 0 });
+        r.together++;
+        if (h.winners.includes(k)) r.mine++;
+        if (h.winners.includes(p.k)) r.theirs++;
+      }
+    }
+    return Object.values(rows).sort((a, b) => b.together - a.together);
+  }
+  function fmtDate(ts) {
+    const d = new Date(ts), loc = lang === "pt" ? "pt-BR" : "en-CA";
+    return d.toLocaleDateString(loc, { day: "2-digit", month: "short" }) + " · " + d.toLocaleTimeString(loc, { hour: "2-digit", minute: "2-digit" });
+  }
+  const pct = (w, p) => (p ? Math.round((w / p) * 100) : 0);
+  function rankBadge(i) { return `<span class="rank ${["r1", "r2", "r3"][i] || ""}">${i + 1}</span>`; }
+  function boardHtml() {
+    const rows = leaderboard();
+    const games = historyList().length;
+    let body = `<section class="board">
+      <div class="board-head">
+        <p class="menu-sub">${games ? t("boardCount", { c: games, d: fmtDate(historyList()[games - 1].ts).split(" · ")[0] }) : t("boardEmpty")}</p>
+        <div class="seg" role="group" aria-label="${esc(t("boardTitle"))}">
+          <button data-act="boardbots" data-v="yes" aria-pressed="${boardBots}">${t("withBots")}</button>
+          <button data-act="boardbots" data-v="no" aria-pressed="${!boardBots}">${t("peopleOnly")}</button>
+        </div>
+      </div>`;
+    if (isMyTurn() && mode === "online") body += `<button class="btn primary" data-act="go" data-v="game">${t("backYourTurn")}</button>`;
+    if (!rows.length) return body + `<div class="panel"><p>${t("boardNone")}</p></div></section>`;
+
+    body += `<div class="board-grid"><div class="panel">
+      <span class="label">${t("ranking")}</span>
+      <div class="tablewrap"><table class="ranktable">
+        <thead><tr><th>#</th><th>${t("player")}</th><th class="num">${t("played")}</th><th class="num">${t("wonCol")}</th><th>${t("winRate")}</th></tr></thead>
+        <tbody>${rows.map((r, i) => `<tr>
+          <td>${rankBadge(i)}</td>
+          <td><b>${esc(r.nick)}</b>${r.bot ? ` <small class="botsmall">${t("botTag")}</small>` : ""}</td>
+          <td class="num">${r.played}</td>
+          <td class="num"><b>${r.wins}</b></td>
+          <td><span class="ratebar"><i style="width:${pct(r.wins, r.played)}%"></i></span><span class="ratepct">${pct(r.wins, r.played)}%</span></td>
+        </tr>`).join("")}</tbody>
+      </table></div>
+    </div>`;
+
+    const who = rows.find((r) => r.k === vsKey) ? vsKey : rows.find((r) => r.k === myKey())?.k || rows.find((r) => !r.bot)?.k || rows[0].k;
+    const h2h = headToHead(who);
+    const whoNick = rows.find((r) => r.k === who)?.nick || "";
+    body += `<div class="board-side"><div class="panel">
+      <label class="label" for="vsWho">${t("vsTitle")}</label>
+      <select id="vsWho" class="select">${rows.map((r) => `<option value="${esc(r.k)}" ${r.k === who ? "selected" : ""}>${esc(r.nick)}</option>`).join("")}</select>
+      ${h2h.length ? `<ul class="h2h">${h2h.map((r) => `<li>
+          <div class="h2h-top"><b>${esc(whoNick)} × ${esc(r.nick)}</b><span class="note">${t("together", { c: r.together })}</span></div>
+          <div class="h2h-bar" aria-label="${esc(`${whoNick} ${r.mine}, ${r.nick} ${r.theirs}`)}">
+            <span class="mine" style="flex:${r.mine || 0.0001}">${r.mine}</span><span class="theirs" style="flex:${r.theirs || 0.0001}">${r.theirs}</span>
+          </div>
+        </li>`).join("")}</ul>` : `<p class="note">${t("vsNone")}</p>`}
+    </div>
+    <div class="panel">
+      <span class="label">${t("recent")}</span>
+      <ul class="recent">${historyList().slice(0, 8).map((h) => `<li>
+        <span class="note">${fmtDate(h.ts)}</span>
+        <span>${h.players.filter((p) => boardBots || !p.bot).map((p) => h.winners.includes(p.k) ? `<b class="winner">${esc(p.nick)}</b>` : esc(p.nick)).join(", ")}</span>
+      </li>`).join("")}</ul>
+    </div></div></div>`;
+
+    if (canWrite) body += askReset
+      ? `<div class="actions"><span class="note">${t("resetAsk")}</span><button class="btn small" data-act="resetyes">${t("resetYes")}</button><button class="btn small" data-act="resetno">${t("endNo")}</button></div>`
+      : `<button class="linkbtn" data-act="resetask">${t("reset")}</button>`;
+    return body + `</section>`;
+  }
+  // ---------- sand timer ----------
+  const TIMER_OPTIONS = [0, 30, 60, 90];
+  const coverShowing = () => mode === "local" && game?.status === "playing" && revealedSeq !== game.seq && !game.players[game.turn].bot && humanCount() > 1;
+  function timeLeft() {
+    if (!game || game.status !== "playing" || !game.timer || game.players[game.turn].bot) return null;
+    return game.timer - (Date.now() - clockStart) / 1000;
+  }
+  async function setTimer(sec) {
+    try {
+      await store.setSettings({ ...settings, timer: sec });
+      if (game?.status === "playing") await store.updateGame({ timer: sec, timerAt: Date.now() });
+    } catch (e) { toast(t("saveFail")); }
+  }
+  // Time's up: undo whatever was moved and draw, same as giving up (3 cards if the table was touched).
+  function timeoutDraw() {
+    const uid = game.players[game.turn].uid;
+    const g = applyDraw(clone(game), uid);
+    const e = g.log[0];
+    if (e && (e.k === "bought" || e.k === "bought3")) g.log[0] = { k: "timeout", n: e.n, c: e.k === "bought3" ? e.c : 1 };
+    if (uid === meId()) { ws = null; sel.clear(); toast(t("timeUp")); }
+    commit(g);
+  }
+  function tick() {
+    if (coverShowing()) clockStart = Date.now();   // the clock waits while the device is being passed
+    const left = timeLeft();
+    if (left === null) return;
+    const sec = document.getElementById("sandSec"), bar = document.getElementById("sandBar"), box = document.getElementById("sand");
+    if (sec) sec.textContent = Math.max(0, Math.ceil(left));
+    if (bar) bar.style.width = Math.max(0, (left / game.timer) * 100) + "%";
+    if (box) box.classList.toggle("low", left <= 10);
+    if (left > 0 || timeoutFired === clockKey || busy || !canWrite) return;
+    // The player's own device acts at zero; if they've left, anyone at the table does a few seconds later.
+    if (isMyTurn() || ((mode === "local" || amInGame()) && left <= -6)) { timeoutFired = clockKey; timeoutDraw(); }
+  }
+  setInterval(tick, 250);
+  function sandHtml() {
+    const left = timeLeft();
+    if (left === null) return "";
+    const pct = Math.max(0, (left / game.timer) * 100);
+    return `<div class="sand ${left <= 10 ? "low" : ""}" id="sand" role="timer" aria-label="${esc(t("sandTimer"))}">
+      <svg class="${justFlipped ? "flip" : ""}" width="14" height="20" viewBox="0 0 14 20" aria-hidden="true"><path d="M1 1h12M1 19h12M2.5 1c0 6 9 5 9 9s-9 3-9 9M11.5 1c0 6-9 5-9 9s9 3 9 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <span><b id="sandSec">${Math.max(0, Math.ceil(left))}</b>s</span>
+      <span class="sandbar"><i id="sandBar" style="width:${pct}%"></i></span>
+    </div>`;
+  }
+  function timerControl(current) {
+    if (!canWrite) return "";
+    return `<div class="timerctl"><span class="label">${t("sandTimer")}</span><div class="seg" role="group" aria-label="${esc(t("sandTimer"))}">${TIMER_OPTIONS.map((s) => `<button data-act="timer" data-v="${s}" aria-pressed="${(current || 0) === s}">${s ? s + "s" : t("off")}</button>`).join("")}</div></div>`;
+  }
+
+  function endGame() {
+    const g = clone(game);
+    g.status = "over"; g.winners = []; g.aborted = true; g.seq++;
+    pushLog(g, { k: "aborted", n: nickOf(myId && amInGame() ? meId() : game.players[game.turn].uid) });
+    askEnd = false;
+    commit(g);
+  }
+  function moveTo(target) {
+    if (!ws || !sel.size) return;
+    const ids = [...sel];
+    const blocked = target === "hand" ? ids.filter((id) => !ws.orig.has(id)) : [];
+    const moving = ids.filter((id) => !blocked.includes(id));
+    ws.hand = ws.hand.filter((id) => !moving.includes(id));
+    ws.table = ws.table.map((m) => m.filter((id) => !moving.includes(id)));
+    if (target === "hand") ws.hand.push(...moving);
+    else if (target === "new") ws.table.push(moving);
+    else ws.table[target].push(...moving);
+    ws.table = ws.table.filter((m) => m.length).map(sortMeld);
+    sel.clear();
+    if (blocked.length) toast(t("tableStays"));
+    if (!game.touched && moving.some((id) => !ws.orig.has(id))) markTouched();
+    render();
+  }
+  // House rule: once you move a card that was already on the table, giving up costs 3 cards.
+  // Saved to the shared game so a reload doesn't clear it and everyone sees it.
+  function markTouched() {
+    game.touched = true;
+    store.setGame(clone(game)).catch(() => {});
+  }
+  async function sit(nick) {
+    nick = nick.trim().slice(0, 24);
+    if (!nick || !store) return;
+    const id = mode === "local" ? randId() : myId;
+    try { await store.setSeat(id, { nick, joinedAt: Date.now() }); }
+    catch (e) { toast(t("saveFail")); }
+  }
+  async function unseat(id) { try { await store.delSeat(id); } catch (e) { toast(t("saveFail")); } }
+
+  // ---------- sound & toast ----------
+  function chime() {
+    if (!audioOk) return;
+    try {
+      const ctx = chime.ctx || (chime.ctx = new (window.AudioContext || window.webkitAudioContext)());
+      [660, 880].forEach((f, i) => {
+        const o = ctx.createOscillator(), gn = ctx.createGain();
+        o.frequency.value = f; o.type = "sine";
+        gn.gain.setValueAtTime(0.0001, ctx.currentTime + i * 0.16);
+        gn.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + i * 0.16 + 0.02);
+        gn.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + i * 0.16 + 0.35);
+        o.connect(gn).connect(ctx.destination); o.start(ctx.currentTime + i * 0.16); o.stop(ctx.currentTime + i * 0.16 + 0.4);
+      });
+    } catch (e) {}
+  }
+  function toast(msg) {
+    const el = document.getElementById("toast");
+    el.textContent = msg; el.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, 3200);
+  }
+
+  // ---------- render ----------
+  function cardHtml(id, { interactive = false, fresh = false, last = false } = {}) {
+    const { r, s } = parse(id);
+    const cls = ["card", s === "H" || s === "D" ? "red" : "", sel.has(id) ? "sel" : "", fresh ? "fresh" : "", last ? "lastplay" : "", last && justMoved ? "pop" : "", interactive ? "" : "static"].join(" ");
+    const attrs = interactive ? `data-act="card" data-id="${id}" aria-pressed="${sel.has(id)}"` : `tabindex="-1" aria-disabled="true"`;
+    return `<button class="${cls}" ${attrs} aria-label="${RL(r)}${SYM[s]}"><span class="ix">${RL(r)}<i>${SYM[s]}</i></span><span class="pip">${SYM[s]}</span></button>`;
+  }
+  // Screens follow the usual card-game flow: Home → Sala (seats & options) → Partida, with the
+  // scoreboard one tap from Home, everything else in the ☰ menu, and a results sheet at the end.
+  const ICON = {
+    back: `<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M12.5 4 6.5 10l6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    menu: `<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+    gear: `<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+    close: `<svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`
+  };
+  // Hooks the family (peer-to-peer) edition fills in; they stay empty in the Claude version.
+  const hooks = { status: () => "", invite: () => "", acts: {} };
+  const you = () => (lang === "pt" ? "você" : "you");
+  const gameKey = () => (game ? game.id || "s" + game.seq : null);
+  const initial = (nick) => (String(nick).replace(/^Robô\s+/, "").trim()[0] || "?").toUpperCase();
+  function avatar(nick, bot, cls = "") { return `<span class="avatar ${bot ? "bot" : ""} ${cls}" aria-hidden="true">${esc(initial(nick))}</span>`; }
+  function resultTitle() {
+    const w = game.winners || [];
+    return game.aborted || !w.length ? t("aborted") : w.length > 1 ? t("wonMany", { n: w.map(nickOf).join(", ") }) : t("won", { n: nickOf(w[0]) });
+  }
+  function notes() {
+    let h = "";
+    if (mode === "local") h += `<p class="note">${t("localMode")}</p>`;
+    if (!canWrite) h += `<p class="note">${t("readOnly")}</p>`;
+    return h;
+  }
+  function topbar(title) {
+    return `<div class="topbar">
+      <button class="iconbtn" data-act="go" data-v="home" aria-label="${esc(t("back"))}">${ICON.back}</button>
+      <h1 class="topbar-title">${title}</h1>
+      <button class="iconbtn" data-act="modal" data-v="settings" aria-label="${esc(t("settings"))}">${ICON.gear}</button>
+    </div>`;
+  }
+  function langControl() {
+    return `<div class="timerctl"><span class="label">${t("language")}</span><div class="seg" role="group" aria-label="${esc(t("language"))}">
+      <button data-act="lang" data-v="pt" aria-pressed="${lang === "pt"}">Português</button>
+      <button data-act="lang" data-v="en" aria-pressed="${lang === "en"}">English</button>
+    </div></div>`;
+  }
+
+  // ----- Home -----
+  function homeScreen() {
+    const fan = ["1H0", "2S0", "13D0", "12C0", "11S0"].map((id, i) => `<div class="fan-card" style="--i:${i - 2}">${cardHtml(id)}</div>`).join("");
+    const playing = game?.status === "playing";
+    const inIt = playing && (mode === "local" || amInGame());
+    let status = "";
+    if (playing) status = `<p class="pill ${isMyTurn() ? "mine" : ""}">${isMyTurn() && mode === "online" ? t("yourTurn") : t("inProgress", { n: nickOf(game.players[game.turn].uid) })}</p>`;
+    else if (game?.status === "over") status = `<p class="pill quiet">${t("lastGame")}: ${resultTitle()}</p>`;
+    const primary = playing
+      ? `<button class="btn primary big" data-act="go" data-v="game">${inIt ? t("resume") : t("watch")}</button>${inIt ? "" : `<button class="btn big" data-act="go" data-v="lobby">${t("nextGame")}</button>`}`
+      : `<button class="btn primary big" data-act="go" data-v="lobby">${t("play")}</button>`;
+    return `<div class="home">
+      <div class="home-top"><button class="iconbtn" data-act="modal" data-v="settings" aria-label="${esc(t("settings"))}">${ICON.gear}</button></div>
+      <div class="home-main">
+        <div class="fan" aria-hidden="true">${fan}</div>
+        <h1 class="logo">Mexe-Mexe</h1>
+        <p class="tagline">${t("tagline")}</p>
+        ${hooks.status()}
+        ${status}
+        <div class="home-actions">
+          ${primary}
+          ${hooks.invite()}
+          <button class="btn big" data-act="go" data-v="board">${t("tabBoardLong")}</button>
+          <button class="btn big" data-act="modal" data-v="rules">${t("howTo")}</button>
+        </div>
+        ${notes()}
+      </div>
+    </div>`;
+  }
+
+  // ----- Sala: six seat slots, options, start -----
+  function lobbyScreen() {
+    const mine = lobby.some((s) => s.id === myId);
+    const showForm = canWrite && store && (mode === "local" || !mine);
+    const playing = game?.status === "playing";
+    const seats = lobby.slice(0, 6), waiting = lobby.slice(6);
+    const slot = (s) => `<div class="slot ${s.bot ? "bot" : ""} ${s.id === myId && mode !== "local" ? "me" : ""}">
+        ${canWrite ? `<button class="iconbtn tiny x" data-act="unseat" data-id="${esc(s.id)}" aria-label="${esc((s.id === myId ? t("stand") : t("remove")) + ": " + s.nick)}">${ICON.close}</button>` : ""}
+        ${avatar(s.nick, s.bot, "lg")}
+        <b class="slot-name">${esc(s.nick)}</b>
+        <small>${s.bot ? t("botTag") : s.id === myId && mode !== "local" ? you() : t("personTag")}</small>
+      </div>`;
+    const empty = Array.from({ length: Math.max(0, 6 - seats.length) }, () => canWrite && !playing
+      ? `<button class="slot empty" data-act="addbot"><span class="plus" aria-hidden="true">+</span><span>${t("addBotShort")}</span></button>`
+      : `<div class="slot empty"><span>${t("freeSeat")}</span></div>`).join("");
+    return topbar(t("lobbyTitle")) + `<div class="screen">
+      ${notes()}
+      ${hooks.status()}
+      ${playing ? `<div class="banner-row"><span>${t("inProgress", { n: nickOf(game.players[game.turn].uid) })}</span><button class="btn small" data-act="go" data-v="game">${amInGame() ? t("resume") : t("watch")}</button></div>` : ""}
+      ${showForm ? `<section class="block">
+        <h2 class="block-title">${t("yourName")}</h2>
+        <form class="field" data-form="sit"><input id="nick" name="nick" maxlength="24" autocomplete="nickname" placeholder="${esc(t("nickPh"))}" aria-label="${esc(t("nickPh"))}"><button class="btn" type="submit">${mode === "local" && lobby.length ? t("sitAnother") : t("sit")}</button></form>
+      </section>` : ""}
+      <section class="block">
+        <div class="block-head"><h2 class="block-title">${t("players")}</h2><span class="count">${Math.min(lobby.length, 6)}/6</span></div>
+        <div class="seatgrid">${seats.map(slot).join("")}${empty}</div>
+        ${waiting.length ? `<p class="note">${t("waitingList")}: ${waiting.map((s) => esc(s.nick)).join(", ")}</p>` : ""}
+        <p class="note">${mode === "online" ? t("inviteHint") : t("botHint")}</p>
+        ${hooks.invite()}
+      </section>
+      ${canWrite ? `<section class="block"><h2 class="block-title">${t("options")}</h2>${timerControl(settings.timer)}${botSpeedControl()}</section>
+      <div class="startbar">
+        <button class="btn primary big" data-act="start" ${lobby.length < 2 || busy || playing ? "disabled" : ""}>${t("start")}</button>
+        ${lobby.length < 2 ? `<p class="note">${t("needTwo")}</p>` : ""}
+      </div>` : ""}
+    </div>`;
+  }
+
+  // ----- Placar -----
+  function boardScreen() {
+    return topbar(t("boardTitle")) + `<div class="screen">${notes()}${boardHtml()}</div>`;
+  }
+
+  // ----- Partida -----
+  function playersRow() {
+    return `<div class="players">${game.players.map((p, i) => {
+      const active = game.status === "playing" && i === game.turn;
+      const isMe = p.uid === meId() && mode !== "local";
+      const n = game.hands[p.uid]?.length ?? 0;
+      return `<div class="pchip ${active ? "turn" : ""} ${isMe ? "me" : ""}">
+        ${avatar(p.nick, p.bot)}
+        <span class="pname">${esc(p.nick)}${isMe ? ` <small>(${you()})</small>` : ""}</span>
+        ${active && p.bot ? `<span class="thinking" role="img" aria-label="${esc(t("thinking"))}"><i></i><i></i><i></i></span>` : ""}
+        <span class="pcount" title="${esc(t("cardsLeft", { c: n }))}" aria-label="${esc(t("cardsLeft", { c: n }))}">${n}</span>
+      </div>`;
+    }).join("")}</div>`;
+  }
+  const logLine = (e) => t("lg_" + e.k, { n: e.n || "", c: e.c ?? "" });
+  function logItem(e) {
+    const p = game.players.find((x) => x.nick === e.n);
+    return `<li>${e.n ? avatar(e.n, p?.bot) : `<span class="avatar ghost" aria-hidden="true"></span>`}<span>${logLine(e)}</span></li>`;
+  }
+  // "Since your last move": every move the others made while you waited, oldest first.
+  function activityBox() {
+    const log = game.log || [];
+    const since = baseline && (mode === "local" || amInGame()) ? log.filter((e) => e.s > baseline.seq) : [];
+    const list = since.length ? since : log.slice(0, 1);
+    if (!list.length) return "";
+    const shown = list.slice(0, 5).reverse();
+    return `<section class="activity ${justMoved ? "pop" : ""}" aria-live="polite">
+      <span class="label">${since.length ? t("sinceYou") : t("lastMoveTitle")}</span>
+      <ul>${list.length > 5 ? `<li class="more">${t("moreMoves", { c: list.length - 5 })}</li>` : ""}${shown.map(logItem).join("")}</ul>
+    </section>`;
+  }
+  function tableHtml(mine) {
+    const melds = mine ? ws.table : game.table;
+    const st = mine ? wsStatus() : null;
+    const picking = mine && sel.size > 0;
+    const changed = new Set(game.table.filter(isChangedMeld).map(meldKey));
+    let inner = melds.map((m, i) => {
+      const bad = mine && st.bad.includes(i);
+      const key = meldKey(m), isNew = changed.has(key);
+      return `<div class="meld ${bad ? "bad" : isNew ? "changed" : ""}">
+        ${bad ? `<span class="tag">${t("invalid")}</span>` : isNew ? `<span class="tag newtag">${meldBy[key] ? esc(meldBy[key]) : t("newTag")}</span>` : ""}
+        <div class="row">${m.map((id) => cardHtml(id, { interactive: mine && !busy, fresh: mine && ws.orig.has(id), last: isNewCard(id) && !(mine && ws.orig.has(id)) })).join("")}</div>
+        ${picking ? `<button class="drop" data-act="drop" data-v="${i}">${t("placeHere")}</button>` : ""}
+      </div>`;
+    }).join("");
+    if (picking) inner += `<button class="drop newmeld" data-act="drop" data-v="new">${t("newMeld")}</button>`;
+    if (!melds.length && !picking) inner = `<p class="empty">${t("emptyTable")}</p>`;
+    return `<section class="table" aria-label="${esc(t("table"))}">${inner}</section>`;
+  }
+  function trayHtml() {
+    const me = meId();
+    const mine = isMyTurn() && ws;
+    const handIds = mine ? ws.hand : (game.hands[me] || []);
+    const sorted = sortHand(handIds, sortMode);
+    const backable = mine && [...sel].some((id) => ws.orig.has(id) && !ws.hand.includes(id));
+    let hint = "", actions = "";
+    if (mine && canWrite) {
+      const st = wsStatus();
+      hint = st.bad.length ? `<p class="hint warn">${t("hintFix")}</p>` : st.played > 0 && !st.countOk ? `<p class="hint warn">${t("hintLimit")}</p>` : st.ok ? `<p class="hint">${t("hintReady")}</p>` : st.changed ? `<p class="hint">${t("hintNeedPlay")}</p>` : `<p class="hint">${t("hintPick")}</p>`;
+      if (game.touched && !st.ok) hint += `<p class="hint warn">${t("hintPenalty")}</p>`;
+      actions = `<div class="actions">
+        <button class="btn primary" data-act="confirm" ${st.ok && !busy ? "" : "disabled"}>${t("confirm")}</button>
+        <button class="btn" data-act="undo" ${st.changed && !busy ? "" : "disabled"}>${t("undo")}</button>
+        <button class="btn" data-act="draw" ${!st.changed && !busy ? "" : "disabled"} title="${st.changed ? esc(t("hintBuyUndo")) : ""}">${!game.deck.length ? t("pass") : game.touched ? t("buy3") : t("buy")}</button>
+        ${backable ? `<button class="btn" data-act="drop" data-v="hand">${t("backToHand")}</button>` : ""}
+      </div>`;
+    } else if (game.status === "playing") {
+      hint = `<p class="hint">${t(game.touched ? "mexendo" : "waiting", { n: game.players[game.turn].nick })}</p>`;
+    }
+    return `<section class="tray" aria-label="${esc(t("hand"))}">
+      <div class="tray-head">
+        <span class="label">${mode === "local" ? t("handOf", { n: nickOf(me) }) : t("hand")} · ${handIds.length}</span>
+        <div class="seg" role="group" aria-label="${esc(t("sortLabel"))}">
+          <button data-act="sort" data-v="suit" aria-pressed="${sortMode === "suit"}">${t("sortSuit")}</button>
+          <button data-act="sort" data-v="rank" aria-pressed="${sortMode === "rank"}">${t("sortRank")}</button>
+        </div>
+      </div>
+      <div class="hand ${backable ? "target" : ""}">${sorted.map((id) => cardHtml(id, { interactive: !!mine && !busy && canWrite })).join("")}</div>
+      ${hint}${actions}
+    </section>`;
+  }
+  function gameScreen() {
+    const over = game.status === "over";
+    const mine = !over && isMyTurn() && !!ws;
+    const turnUid = game.players[game.turn].uid;
+    const headline = over ? t("gameOver") : mine && (mode === "online" || humanCount() === 1) ? t("yourTurn") : t("turnOf", { n: nickOf(turnUid) });
+    let h = `<div class="hud">
+      <button class="iconbtn" data-act="modal" data-v="menu" aria-label="${esc(t("menu"))}">${ICON.menu}</button>
+      <p class="turnline ${mine ? "mine" : ""}">${headline}</p>
+      <span class="deck" title="${esc(t("deck", { c: game.deck.length }))}" aria-label="${esc(t("deck", { c: game.deck.length }))}"><span class="back" aria-hidden="true"></span><span>${game.deck.length}</span></span>
+    </div>`;
+    if (!over) h += sandHtml();
+    h += playersRow();
+    h += hooks.status(true);
+    if (mode === "online" && !amInGame()) h += `<p class="note">${t("spectator")}</p>`;
+    if (!over && coverShowing()) {
+      return h + `<div class="panel"><h2>${t("cover", { n: nickOf(turnUid) })}</h2><p class="note">${t("coverHelp", { n: nickOf(turnUid) })}</p><div class="actions"><button class="btn primary" data-act="reveal">${t("reveal", { n: nickOf(turnUid) })}</button></div></div>` + tableHtml(false);
+    }
+    h += activityBox() + tableHtml(mine);
+    if (over) {
+      h += `<div class="startbar"><div class="actions">
+        ${canWrite ? `<button class="btn primary" data-act="again" ${busy ? "disabled" : ""}>${t("playAgain")}</button>` : ""}
+        <button class="btn" data-act="go" data-v="home">${t("mainMenu")}</button>
+      </div></div>`;
+      if (resultsSeen !== gameKey()) h += resultsSheet();
+    } else if (mode === "local" || amInGame()) h += trayHtml();
+    return h;
+  }
+
+  // ----- Popups -----
+  function sheet(title, inner, extra = "") {
+    return `<div class="scrim" data-scrim="${extra}"><div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+      <div class="sheet-head"><h2 class="sheet-title">${title}</h2><button class="iconbtn" data-act="${extra === "results" ? "seeTable" : "modal"}" data-v="" aria-label="${esc(t("close"))}">${ICON.close}</button></div>
+      ${inner}
+    </div></div>`;
+  }
+  function resultsSheet() {
+    const won = game.winners || [];
+    const standings = [...game.players].sort((a, b) => (game.hands[a.uid]?.length || 0) - (game.hands[b.uid]?.length || 0));
+    return sheet(t("gameOver"), `
+      <p class="result-title">${resultTitle()}</p>
+      ${game.deckOut ? `<p class="note">${t("deckOut")}</p>` : ""}
+      <ol class="standings">${standings.map((p) => `<li class="${won.includes(p.uid) ? "win" : ""}">${avatar(p.nick, p.bot)}<span class="grow">${esc(p.nick)}</span><span class="note">${won.includes(p.uid) && !game.deckOut ? t("wentOut") : t("cardsLeft", { c: game.hands[p.uid]?.length ?? 0 })}</span></li>`).join("")}</ol>
+      <div class="sheet-actions">
+        ${canWrite ? `<button class="btn primary big" data-act="again" ${busy ? "disabled" : ""}>${t("playAgain")}</button>` : ""}
+        <button class="btn big" data-act="seeTable">${t("seeTable")}</button>
+        <button class="btn big" data-act="go" data-v="home">${t("mainMenu")}</button>
+      </div>`, "results");
+  }
+  function menuSheet() {
+    const playing = game?.status === "playing";
+    const end = playing && canWrite && amInGame()
+      ? askEnd
+        ? `<div class="confirm"><p>${t("endAsk")}</p><div class="actions"><button class="btn danger" data-act="endyes">${t("endYes")}</button><button class="btn" data-act="endno">${t("endNo")}</button></div></div>`
+        : `<button class="btn danger" data-act="endask">${t("endGame")}</button>`
+      : "";
+    return sheet(t("menu"), `
+      <div class="menulist">
+        <button data-act="modal" data-v="">${t("continue")}</button>
+        <button data-act="modal" data-v="log">${t("history")}</button>
+        <button data-act="modal" data-v="rules">${t("howTo")}</button>
+        <button data-act="go" data-v="board">${t("tabBoardLong")}</button>
+        <button data-act="go" data-v="home">${t("mainMenu")}</button>
+      </div>
+      ${playing && canWrite ? `<div class="sheet-sec">${timerControl(game.timer)}${botSpeedControl()}</div>` : ""}
+      <div class="sheet-sec">${langControl()}</div>
+      ${end}`);
+  }
+  function settingsSheet() {
+    return sheet(t("settings"), `
+      <div class="sheet-sec">${langControl()}</div>
+      ${canWrite ? `<div class="sheet-sec">${timerControl(game?.status === "playing" ? game.timer : settings.timer)}<p class="note">${t("timerHelp")}</p>${botSpeedControl()}</div>` : ""}
+      ${notes()}`);
+  }
+  function logSheet() {
+    const log = game.log || [];
+    return sheet(t("history"), log.length ? `<ul class="historylist">${log.map(logItem).join("")}</ul>` : `<p class="note">${t("noMoves")}</p>`);
+  }
+  function rulesSheet() {
+    return sheet(t("howTo"), `<ul class="ruleslist">${["r1", "r2", "r2b", "r3", "r3b", "r4", "r5", "r6", "r7"].map((k) => `<li>${t(k)}</li>`).join("")}</ul>`);
+  }
+
+  function render() {
+    const app = document.getElementById("app");
+    const focusId = document.activeElement?.id;
+    const nickVal = document.getElementById("nick")?.value || "";
+    let body;
+    if (mode === "connecting") body = `<div class="home"><div class="home-main"><h1 class="logo">Mexe-Mexe</h1><p class="note">${t("connecting")}</p></div></div>`;
+    else if (screen === "lobby") body = lobbyScreen();
+    else if (screen === "board") body = boardScreen();
+    else if (screen === "game" && (game?.status === "playing" || game?.status === "over")) body = gameScreen();
+    else body = homeScreen();
+    if (modal === "menu") body += menuSheet();
+    else if (modal === "settings") body += settingsSheet();
+    else if (modal === "rules") body += rulesSheet();
+    else if (modal === "log" && game) body += logSheet();
+    app.innerHTML = body;
+    const nick = document.getElementById("nick");
+    if (nick) nick.value = nickVal;
+    if (focusId && document.getElementById(focusId)) document.getElementById(focusId).focus();
+    justFlipped = false; justMoved = false;
+  }
+
+  // ---------- events ----------
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape") return;
+    if (modal) { modal = null; askEnd = false; render(); }
+    else if (screen === "game" && game?.status === "over" && resultsSeen !== gameKey()) { resultsSeen = gameKey(); render(); }
+  });
+  document.addEventListener("click", (ev) => {
+    audioOk = true;
+    // Tapping the dimmed area around a popup closes it.
+    if (ev.target.classList?.contains("scrim")) {
+      if (ev.target.dataset.scrim === "results") resultsSeen = gameKey(); else { modal = null; askEnd = false; }
+      render(); return;
+    }
+    const el = ev.target.closest("[data-act]");
+    if (!el || el.disabled) return;
+    const act = el.dataset.act, v = el.dataset.v;
+    switch (act) {
+      case "lang": lang = v; ls.set("mm-lang", v); onGame(game); break;
+      case "sort": sortMode = v; ls.set("mm-sort", v); render(); break;
+      case "card": {
+        if (!isMyTurn() || !ws || busy) return;
+        const id = el.dataset.id;
+        sel.has(id) ? sel.delete(id) : sel.add(id);
+        render(); break;
+      }
+      case "drop": moveTo(v === "new" || v === "hand" ? v : +v); break;
+      case "undo": buildWs(); render(); break;
+      case "confirm": confirmPlay(); break;
+      case "draw": drawAndPass(); break;
+      case "start": startGame(); break;
+      case "addbot": addBot(); break;
+      case "timer": setTimer(+v); break;
+      case "botspeed": store.setSettings({ ...settings, botSpeed: v }).catch(() => toast(t("saveFail"))); break;
+      case "go":
+        if (game?.status === "over" && v !== "game") resultsSeen = gameKey();
+        screen = v; modal = null; askReset = false; askEnd = false;
+        render(); window.scrollTo(0, 0); break;
+      case "modal": modal = v || null; askEnd = false; render(); break;
+      case "seeTable": resultsSeen = gameKey(); render(); break;
+      case "again": resultsSeen = gameKey(); if (lobby.length >= 2) startGame(); else { screen = "lobby"; render(); } break;
+      case "boardbots": boardBots = v === "yes"; ls.set("mm-board-bots", v); render(); break;
+      case "resetask": askReset = true; render(); break;
+      case "resetno": askReset = false; render(); break;
+      case "resetyes": askReset = false; store.setStats({ ...stats, history: [] }).catch(() => toast(t("saveFail"))); break;
+      case "unseat": unseat(el.dataset.id); break;
+      case "reveal": revealedSeq = game.seq; render(); break;
+      case "endask": askEnd = true; render(); break;
+      case "endno": askEnd = false; render(); break;
+      case "endyes": modal = null; endGame(); break;
+      default: if (hooks.acts[act]) hooks.acts[act](el);
+    }
+  });
+  document.addEventListener("change", (ev) => {
+    if (ev.target.id === "vsWho") { vsKey = ev.target.value; render(); }
+  });
+  document.addEventListener("submit", (ev) => {
+    const f = ev.target.closest("[data-form='sit']");
+    if (!f) return;
+    ev.preventDefault();
+    const input = f.querySelector("input");
+    sit(input.value);
+    input.value = "";
+  });
+
+  // ---------- family edition: peer-to-peer table ----------
+  // No accounts. Whoever opens the plain link HOSTS the table: their device keeps the game,
+  // seats, settings and scoreboard, and sends the whole state to everyone connected.
+  // Whoever opens the link with ?mesa=<id> is a GUEST: they receive that state and send
+  // their moves back to the host. Connections go device-to-device through PeerJS.
+  Object.assign(T.pt, {
+    inviteHint: "Toque em Convidar e mande o link pelo WhatsApp. Faltou gente? Toque num lugar vago para adicionar um computador.",
+    invite: "Convidar pelo WhatsApp",
+    copyLink: "Copiar link da mesa",
+    copied: "Link copiado!",
+    inviteText: "Vem jogar Mexe-Mexe comigo! É só tocar no link:",
+    netHostOpen: "Sua mesa está aberta · {c} conectado(s)",
+    netHostOpening: "Abrindo sua mesa…",
+    netHostKeep: "Deixe o jogo aberto enquanto a família joga.",
+    netTaken: "Sua mesa já está aberta em outra aba ou aparelho. Feche a outra e recarregue.",
+    netOffline: "Sem conexão: dá para jogar só com computadores.",
+    netReconnecting: "Reconectando…",
+    netGuestOpen: "Conectado à mesa",
+    netGuestConnecting: "Entrando na mesa…",
+    netHostAway: "A mesa está fechada no momento. Peça para quem te convidou abrir o jogo. Tentando de novo…",
+    netNoState: "Esperando a mesa responder…"
+  });
+  Object.assign(T.en, {
+    inviteHint: "Tap Invite and send the link on WhatsApp. Short on players? Tap an empty seat to add a computer.",
+    invite: "Invite on WhatsApp",
+    copyLink: "Copy table link",
+    copied: "Link copied!",
+    inviteText: "Come play Mexe-Mexe with me! Just tap the link:",
+    netHostOpen: "Your table is open · {c} connected",
+    netHostOpening: "Opening your table…",
+    netHostKeep: "Keep the game open while the family plays.",
+    netTaken: "Your table is already open in another tab or device. Close it and reload.",
+    netOffline: "No connection: you can still play with computers.",
+    netReconnecting: "Reconnecting…",
+    netGuestOpen: "Connected to the table",
+    netGuestConnecting: "Joining the table…",
+    netHostAway: "The table is closed right now. Ask whoever invited you to open the game. Trying again…",
+    netNoState: "Waiting for the table to answer…"
+  });
+
+  const joinId = new URLSearchParams(location.search).get("mesa");
+  const net = { role: joinId ? "guest" : "host", status: "connecting", peers: 0, hostId: joinId };
+  const PEER_OPTS = { debug: 0 };
+  const tableLink = () => location.origin + location.pathname + "?mesa=" + encodeURIComponent(net.hostId || "");
+
+  hooks.status = (compact) => {
+    const s = net.status, host = net.role === "host";
+    if (compact && s === "open") return "";
+    let text, cls = "";
+    if (host) text = s === "open" ? t("netHostOpen", { c: net.peers }) : s === "taken" ? t("netTaken") : s === "offline" ? t("netOffline") : s === "reconnecting" ? t("netReconnecting") : t("netHostOpening");
+    else text = s === "open" ? t("netGuestOpen") : s === "hostAway" ? t("netHostAway") : s === "reconnecting" ? t("netReconnecting") : t("netGuestConnecting");
+    if (s === "open") cls = "ok"; else if (s === "taken" || s === "hostAway" || s === "offline") cls = "warn";
+    return `<p class="netpill ${cls}" role="status"><i aria-hidden="true"></i>${text}</p>${host && s === "open" && !compact ? `<p class="note">${t("netHostKeep")}</p>` : ""}`;
+  };
+  hooks.invite = () => {
+    if (net.role !== "host" || net.status !== "open") return "";
+    const msg = `${t("inviteText")} ${tableLink()}`;
+    return `<div class="invite">
+      <a class="btn big whatsapp" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">${t("invite")}</a>
+      <button class="btn big" data-act="copylink">${t("copyLink")}</button>
+    </div>`;
+  };
+  hooks.acts.copylink = async () => {
+    const link = tableLink();
+    try {
+      if (navigator.share) { await navigator.share({ title: "Mexe-Mexe", text: t("inviteText"), url: link }); return; }
+      await navigator.clipboard.writeText(link); toast(t("copied"));
+    } catch (e) {
+      try { await navigator.clipboard.writeText(link); toast(t("copied")); } catch (e2) { toast(link); }
+    }
+  };
+
+  // Host: the normal on-device store, plus a broadcast of every change to the guests.
+  function makeHostStore() {
+    const local = makeLocalStore();
+    const snap = { game: null, lobby: [], settings: {}, stats: {} };
+    const conns = new Set();
+    let queued = false;
+    const broadcast = () => {
+      if (queued) return;
+      queued = true;
+      setTimeout(() => {
+        queued = false;
+        conns.forEach((c) => { try { if (c.open) c.send({ type: "state", data: snap }); } catch (e) {} });
+      });
+    };
+    local.subGame((g) => { snap.game = g; broadcast(); });
+    local.subLobby((l) => { snap.lobby = l; broadcast(); });
+    local.subSettings((s) => { snap.settings = s; broadcast(); });
+    local.subStats((s) => { snap.stats = s; broadcast(); });
+    const OPS = ["setGame", "updateGame", "setSeat", "delSeat", "setSettings", "setStats"];
+
+    function start() {
+      if (!window.Peer) { net.status = "offline"; render(); return; }
+      let id = ls.get("mm-host-id");
+      if (!id) { id = "mexe-" + randId().slice(1) + randId().slice(1); ls.set("mm-host-id", id); }
+      const peer = new window.Peer(id, PEER_OPTS);
+      peer.on("open", (pid) => { net.hostId = pid; net.status = "open"; render(); keepAwake(); });
+      peer.on("connection", (c) => {
+        c.on("open", () => { conns.add(c); net.peers = conns.size; c.send({ type: "state", data: snap }); render(); });
+        c.on("data", (m) => {
+          if (m && m.type === "op" && OPS.includes(m.op)) Promise.resolve(local[m.op](...(m.args || []))).catch(() => {});
+        });
+        const drop = () => { conns.delete(c); net.peers = conns.size; render(); };
+        c.on("close", drop); c.on("error", drop);
+      });
+      peer.on("disconnected", () => {
+        net.status = "reconnecting"; render();
+        setTimeout(() => { try { if (!peer.destroyed) peer.reconnect(); } catch (e) {} }, 2000);
+      });
+      peer.on("error", (e) => {
+        if (e.type === "unavailable-id") net.status = "taken";
+        else if (["network", "server-error", "socket-error", "socket-closed"].includes(e.type)) net.status = "reconnecting";
+        render();
+      });
+    }
+    start();
+    return local;
+  }
+
+  // Guest: mirrors the host's state and sends every write to the host.
+  function makeGuestStore(hostId) {
+    const subs = { game: [], lobby: [], settings: [], stats: [] };
+    let data = null, conn = null, peer = null, retryTimer = null;
+    const emit = (k) => subs[k].forEach((f) => f(data[k]));
+    function onState(d) { data = d; ["settings", "stats", "lobby", "game"].forEach(emit); }
+    function send(op, args) {
+      if (!conn || !conn.open) return Promise.reject({ code: "unavailable" });
+      conn.send({ type: "op", op, args });
+      return Promise.resolve();
+    }
+    function retry(status) {
+      net.status = status || "reconnecting"; render();
+      clearTimeout(retryTimer);
+      retryTimer = setTimeout(() => {
+        try { if (peer.disconnected && !peer.destroyed) peer.reconnect(); } catch (e) {}
+        if (peer.open) connect();
+      }, 4000);
+    }
+    function connect() {
+      if (conn && conn.open) return;
+      net.status = data ? "reconnecting" : "connecting"; render();
+      conn = peer.connect(hostId, { reliable: true, serialization: "json" });
+      conn.on("open", () => { net.status = "open"; render(); });
+      conn.on("data", (m) => { if (m && m.type === "state") onState(m.data); });
+      conn.on("close", () => retry());
+      conn.on("error", () => retry());
+    }
+    if (window.Peer) {
+      peer = new window.Peer(PEER_OPTS);
+      peer.on("open", connect);
+      peer.on("disconnected", () => retry());
+      peer.on("error", (e) => retry(e.type === "peer-unavailable" ? "hostAway" : "reconnecting"));
+    } else net.status = "hostAway";
+    const sub = (k) => (cb) => { subs[k].push(cb); if (data) setTimeout(() => cb(data[k])); return () => {}; };
+    return {
+      subGame: sub("game"), subLobby: sub("lobby"), subSettings: sub("settings"), subStats: sub("stats"),
+      // Moves show up right away on this phone; the host's copy then confirms them for everyone.
+      setGame(g) { if (data) { data.game = g; emit("game"); } return send("setGame", [g]); },
+      updateGame(p) { if (data && data.game) { data.game = { ...data.game, ...p }; emit("game"); } return send("updateGame", [p]); },
+      setSeat: (id, d) => send("setSeat", [id, d]),
+      delSeat: (id) => send("delSeat", [id]),
+      setSettings: (d) => send("setSettings", [d]),
+      setStats: (d) => send("setStats", [d])
+    };
+  }
+
+  // The host's screen must stay on, or the phone sleeps and the table closes.
+  let wakeLock = null;
+  async function keepAwake() {
+    try { if ("wakeLock" in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => { wakeLock = null; }); } } catch (e) {}
+  }
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && net.role === "host") keepAwake(); });
+
+  // ---------- boot ----------
+  function localId() {
+    let id = ls.get("mm-id");
+    if (!id) { id = randId(); ls.set("mm-id", id); }
+    return id;
+  }
+  function boot() {
+    mode = "online";
+    myId = localId();
+    store = net.role === "host" ? makeHostStore() : makeGuestStore(joinId);
+    store.subSettings((s) => { settings = s || {}; render(); });
+    store.subStats((s) => { stats = s || {}; render(); });
+    store.subLobby((l) => { lobby = (l || []).slice().sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0)); render(); });
+    store.subGame((g) => onGame(g));
+    render();
+  }
+  boot();
+})();
+</script>
+
+</body>
+</html>
