@@ -1657,6 +1657,25 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
     if (nick) nick.value = nickVal;
     if (focusId && document.getElementById(focusId)) document.getElementById(focusId).focus();
     justFlipped = false; justMoved = false;
+    // Put the card the player just touched back under their finger, however much the redraw moved it.
+    if (anchor) {
+      const n = document.querySelector(anchor.sel);
+      if (n) window.scrollBy(0, n.getBoundingClientRect().top - anchor.top);
+      anchor = null;
+    }
+  }
+
+  // ---------- keeping your place on a big table ----------
+  // Picking a card adds "Colocar aqui" buttons all over the table, and placing cards reshapes
+  // it, so the page shifts. We note where the touched card (or, when placing, the first card
+  // being moved) sits on screen before the redraw, and scroll it back to that spot afterwards.
+  let anchor = null;
+  function setAnchor(el) {
+    const act = el.dataset.act;
+    const cardSel = (id) => `[data-act="card"][data-id="${id}"]`;
+    if (act === "card") anchor = { sel: cardSel(el.dataset.id), top: el.getBoundingClientRect().top };
+    else if (act === "drop" && sel.size) anchor = { sel: cardSel([...sel][0]), top: el.getBoundingClientRect().top };
+    else if (act === "sort" || act === "undo") anchor = { sel: `[data-act="${act}"]`, top: el.getBoundingClientRect().top };
   }
 
   // ---------- events ----------
@@ -1674,6 +1693,7 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
     }
     const el = ev.target.closest("[data-act]");
     if (!el || el.disabled) return;
+    setAnchor(el);
     const act = el.dataset.act, v = el.dataset.v;
     switch (act) {
       case "lang": lang = v; ls.set("mm-lang", v); onGame(game); break;
