@@ -52,7 +52,8 @@
   const enc = (o) => JSON.stringify(o);
   const dec = (buf) => { try { return JSON.parse(buf.toString()); } catch (e) { return null; } };
   function connectRelay(url, opts, onConnect, onMessage, onDown) {
-    const c = window.mqtt.connect(url, { keepalive: 20, reconnectPeriod: 3000, connectTimeout: 10000, clean: true, clientId: "mm" + randId(), ...opts });
+    // A short keepalive means a phone that drops off is noticed in about 15 seconds.
+    const c = window.mqtt.connect(url, { keepalive: 10, reconnectPeriod: 3000, connectTimeout: 10000, clean: true, clientId: "mm" + randId(), ...opts });
     c.on("connect", () => onConnect(c));
     c.on("message", (topic, payload) => onMessage(c, topic, payload));
     c.on("close", () => onDown(c));
@@ -105,7 +106,7 @@
   // and guests' moves arrive as operations to apply.
   function makeHostStore() {
     const local = makeLocalStore();
-    const snap = { game: null, lobby: [], settings: {}, stats: {} };
+    const snap = { game: null, lobby: [], settings: {}, stats: {}, online: [], hostUid: null };
     let id = ls.get("mm-host-id");
     if (!id) { id = "mexe-" + randId().slice(1) + randId().slice(1); ls.set("mm-host-id", id); }
     net.hostId = id;
@@ -124,7 +125,15 @@
     local.subSettings((s) => { snap.settings = s; broadcast(); });
     local.subStats((s) => { snap.stats = s; broadcast(); });
     const OPS = ["setGame", "updateGame", "setSeat", "delSeat", "setSettings", "setStats"];
-    const countGuests = () => { const all = new Set(); guestsByRelay.forEach((s) => s.forEach((g) => all.add(g))); net.peers = all.size; };
+    // Who is connected: every guest seen on any relay, plus the host. Shared with everyone in the state.
+    let onlineKey = "";
+    const countGuests = () => {
+      const all = new Set([myId]);
+      guestsByRelay.forEach((s) => s.forEach((g) => all.add(g)));
+      net.peers = all.size - 1;
+      const key = [...all].sort().join(",");
+      if (key !== onlineKey) { onlineKey = key; snap.online = [...all]; snap.hostUid = myId; broadcast(); presenceUpdate(all); }
+    };
     const refresh = () => { net.status = up.size ? "open" : clients.size ? "reconnecting" : "connecting"; countGuests(); render(); };
 
     function apply(m) {
@@ -172,7 +181,13 @@
     const refresh = () => {
       const anyHost = [...hostOn.values()].some(Boolean);
       net.status = !up.size ? (net.hasState ? "reconnecting" : "connecting") : anyHost ? "open" : hostOn.size ? "hostAway" : "connecting";
-      render();
+      // Who is connected, as the host last reported it; the host itself drops out when its table closes.
+      if (data) {
+        const set = new Set(data.online || []);
+        set.add(myId);
+        if (!anyHost && data.hostUid) set.delete(data.hostUid);
+        presenceUpdate(set);
+      } else render();
     };
     function onState(m) {
       if (!m || !m.data || m.rev <= rev) return;
