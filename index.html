@@ -258,6 +258,11 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .fan-card { position: absolute; bottom: 0; left: calc(50% - var(--cw) / 2 + var(--i) * var(--cw) * .45); transform: rotate(calc(var(--i) * 10deg)); transform-origin: 50% 130%; }
 .fan-card .card { box-shadow: 0 6px 14px rgba(0, 0, 0, .35); }
 .btn.big { width: 100%; font-size: 17px; padding: 14px 20px; }
+/* Invited guest: just the table and their name */
+.screen.guest { padding-top: 12px; }
+.logo.small { font-size: 44px; text-align: center; }
+.screen.guest .netpill { align-self: center; }
+.screen.guest .pill { align-self: center; text-align: center; }
 .btn.danger { border-color: var(--bad); color: var(--bad); }
 .btn.danger:hover:not(:disabled) { background: rgba(255, 143, 128, .1); }
 
@@ -363,6 +368,9 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
       start: "Começar partida",
       addBot: "+ Adicionar computador",
       menu: "Menu",
+      guestAskName: "Qual é o seu nome?",
+      guestSeated: "Pronto, você está na mesa! A partida começa em instantes.",
+      atTable: "Na mesa",
       thinking: "pensando",
       sinceYou: "Desde a sua última jogada",
       lastMoveTitle: "Última jogada",
@@ -518,6 +526,9 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
       start: "Start game",
       addBot: "+ Add computer",
       menu: "Menu",
+      guestAskName: "What's your name?",
+      guestSeated: "You're at the table! The game starts in a moment.",
+      atTable: "At the table",
       thinking: "thinking",
       sinceYou: "Since your last move",
       lastMoveTitle: "Last move",
@@ -1251,7 +1262,9 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
     close: `<svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`
   };
   // Hooks the family (peer-to-peer) edition fills in; they stay empty in the Claude version.
-  const hooks = { status: () => "", invite: () => "", block: () => "", acts: {} };
+  const hooks = { status: () => "", invite: () => "", block: () => "", guest: () => false, acts: {} };
+  // Table settings (timer, computer speed, ending a game) belong to whoever runs the table.
+  const canConfigure = () => canWrite && !hooks.guest();
   const you = () => (lang === "pt" ? "você" : "you");
   const gameKey = () => (game ? game.id || "s" + game.seq : null);
   const initial = (nick) => (String(nick).replace(/^Robô\s+/, "").trim()[0] || "?").toUpperCase();
@@ -1311,7 +1324,35 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
   }
 
   // ----- Sala: six seat slots, options, start -----
+  // An invited guest gets the bare minimum: who's already at the table, and a place to type
+  // their name and sit. Seats, computers, options and starting the game stay with the host.
+  function guestLobbyScreen() {
+    const mine = lobby.some((s) => s.id === myId);
+    const playing = game?.status === "playing";
+    const seat = (s) => `<div class="slot ${s.bot ? "bot" : ""} ${s.id === myId ? "me" : ""}">
+        ${s.id === myId ? `<button class="iconbtn tiny x" data-act="unseat" data-id="${esc(s.id)}" aria-label="${esc(t("stand"))}">${ICON.close}</button>` : ""}
+        ${avatar(s.nick, s.bot, "lg")}
+        <b class="slot-name">${esc(s.nick)}</b>
+        <small>${s.bot ? t("botTag") : s.id === myId ? you() : t("personTag")}</small>
+      </div>`;
+    return `<div class="screen guest">
+      <h1 class="logo small">Mexe-Mexe</h1>
+      ${hooks.status()}
+      ${playing ? `<div class="banner-row"><span>${t("inProgress", { n: nickOf(game.players[game.turn].uid) })}</span><button class="btn small" data-act="go" data-v="game">${amInGame() ? t("resume") : t("watch")}</button></div>` : ""}
+      ${mine
+        ? `<p class="pill mine">${t("guestSeated")}</p>`
+        : `<section class="block">
+            <h2 class="sheet-title">${t("guestAskName")}</h2>
+            <form class="field" data-form="sit"><input id="nick" name="nick" maxlength="24" autocomplete="nickname" placeholder="${esc(t("nickPh"))}" aria-label="${esc(t("nickPh"))}"><button class="btn primary" type="submit">${t("sit")}</button></form>
+          </section>`}
+      <section class="block">
+        <h2 class="block-title">${t("atTable")}</h2>
+        ${lobby.length ? `<div class="seatgrid">${lobby.slice(0, 6).map(seat).join("")}</div>` : `<p class="note">${t("nobody")}</p>`}
+      </section>
+    </div>`;
+  }
   function lobbyScreen() {
+    if (hooks.guest()) return guestLobbyScreen();
     const mine = lobby.some((s) => s.id === myId);
     const showForm = canWrite && store && (mode === "local" || !mine);
     const playing = game?.status === "playing";
@@ -1454,7 +1495,7 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
     h += activityBox() + tableHtml(mine);
     if (over) {
       h += `<div class="startbar"><div class="actions">
-        ${canWrite ? `<button class="btn primary" data-act="again" ${busy ? "disabled" : ""}>${t("playAgain")}</button>` : ""}
+        ${canConfigure() ? `<button class="btn primary" data-act="again" ${busy ? "disabled" : ""}>${t("playAgain")}</button>` : ""}
         <button class="btn" data-act="go" data-v="home">${t("mainMenu")}</button>
       </div></div>`;
       if (resultsSeen !== gameKey()) h += resultsSheet();
@@ -1477,14 +1518,14 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
       ${game.deckOut ? `<p class="note">${t("deckOut")}</p>` : ""}
       <ol class="standings">${standings.map((p) => `<li class="${won.includes(p.uid) ? "win" : ""}">${avatar(p.nick, p.bot)}<span class="grow">${esc(p.nick)}</span><span class="note">${won.includes(p.uid) && !game.deckOut ? t("wentOut") : t("cardsLeft", { c: game.hands[p.uid]?.length ?? 0 })}</span></li>`).join("")}</ol>
       <div class="sheet-actions">
-        ${canWrite ? `<button class="btn primary big" data-act="again" ${busy ? "disabled" : ""}>${t("playAgain")}</button>` : ""}
+        ${canConfigure() ? `<button class="btn primary big" data-act="again" ${busy ? "disabled" : ""}>${t("playAgain")}</button>` : ""}
         <button class="btn big" data-act="seeTable">${t("seeTable")}</button>
         <button class="btn big" data-act="go" data-v="home">${t("mainMenu")}</button>
       </div>`, "results");
   }
   function menuSheet() {
     const playing = game?.status === "playing";
-    const end = playing && canWrite && amInGame()
+    const end = playing && canConfigure() && amInGame()
       ? askEnd
         ? `<div class="confirm"><p>${t("endAsk")}</p><div class="actions"><button class="btn danger" data-act="endyes">${t("endYes")}</button><button class="btn" data-act="endno">${t("endNo")}</button></div></div>`
         : `<button class="btn danger" data-act="endask">${t("endGame")}</button>`
@@ -1497,14 +1538,14 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
         <button data-act="go" data-v="board">${t("tabBoardLong")}</button>
         <button data-act="go" data-v="home">${t("mainMenu")}</button>
       </div>
-      ${playing && canWrite ? `<div class="sheet-sec">${timerControl(game.timer)}${botSpeedControl()}</div>` : ""}
+      ${playing && canConfigure() ? `<div class="sheet-sec">${timerControl(game.timer)}${botSpeedControl()}</div>` : ""}
       <div class="sheet-sec">${langControl()}</div>
       ${end}`);
   }
   function settingsSheet() {
     return sheet(t("settings"), `
       <div class="sheet-sec">${langControl()}</div>
-      ${canWrite ? `<div class="sheet-sec">${timerControl(game?.status === "playing" ? game.timer : settings.timer)}<p class="note">${t("timerHelp")}</p>${botSpeedControl()}</div>` : ""}
+      ${canConfigure() ? `<div class="sheet-sec">${timerControl(game?.status === "playing" ? game.timer : settings.timer)}<p class="note">${t("timerHelp")}</p>${botSpeedControl()}</div>` : ""}
       ${notes()}`);
   }
   function logSheet() {
@@ -1692,6 +1733,7 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
       <button class="btn big" data-act="copylink">${t("copyLink")}</button>
     </div>`;
   };
+  hooks.guest = () => net.role === "guest";
   hooks.acts.reload = () => location.reload();
   hooks.acts.copylink = async () => {
     const link = tableLink();
@@ -1778,6 +1820,8 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
     };
     function onState(m) {
       if (!m || !m.data || m.rev <= rev) return;
+      // First contact: skip the home screen and go straight to the table to sit down.
+      if (!net.hasState && m.data.game?.status !== "playing") screen = "lobby";
       rev = m.rev; data = m.data; net.hasState = true;
       ["settings", "stats", "lobby", "game"].forEach(emit);
       refresh();
