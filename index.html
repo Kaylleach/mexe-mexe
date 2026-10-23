@@ -1761,12 +1761,12 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
   const joinId = new URLSearchParams(location.search).get("mesa");
   const net = { role: joinId ? "guest" : "host", status: "connecting", peers: 0, hostId: joinId, hasState: false };
   const tableLink = () => location.origin + location.pathname + "?mesa=" + encodeURIComponent(net.hostId || "");
-  const topicsFor = (id) => { const base = "mexe-mexe/v1/" + id; return { state: base + "/state", host: base + "/host", op: base + "/op", guests: base + "/guest/+", guest: (g) => base + "/guest/" + g }; };
+  const topicsFor = (id) => { const base = "mexe-mexe/v1/" + id; return { state: base + "/state", op: base + "/op", hb: base + "/hb" }; };
   const enc = (o) => JSON.stringify(o);
   const dec = (buf) => { try { return JSON.parse(buf.toString()); } catch (e) { return null; } };
   function connectRelay(url, opts, onConnect, onMessage, onDown) {
-    // A short keepalive means a phone that drops off is noticed in about 15 seconds.
-    const c = window.mqtt.connect(url, { keepalive: 10, reconnectPeriod: 3000, connectTimeout: 10000, clean: true, clientId: "mm" + randId(), ...opts });
+    // Heartbeats keep the line busy; a long keepalive avoids drops when a tab is slowed in the background.
+    const c = window.mqtt.connect(url, { keepalive: 60, reconnectPeriod: 3000, connectTimeout: 10000, clean: true, clientId: "mm" + randId(), ...opts });
     c.on("connect", () => onConnect(c));
     c.on("message", (topic, payload) => onMessage(c, topic, payload));
     c.on("close", () => onDown(c));
@@ -1815,16 +1815,53 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
     }
   };
 
+  // ---------- heartbeat: who is at the table ----------
+  // Every device says "I'm here" every 4 seconds on each relay. Anyone silent for 30 seconds
+  // counts as gone; closing the page says goodbye right away. A small worker keeps the beat,
+  // because browsers slow ordinary timers in background tabs, which made people look gone.
+  // While our own connection is down we judge nobody, and on reconnect everyone gets that time back.
+  const BEAT_MS = 4000, GONE_MS = 30000;
+  function makeHeartbeat(topic, clients, base, onChange) {
+    const lastSeen = new Map();
+    let downSince = null, lastKey = null;
+    const beat = (extra) => {
+      const msg = enc({ id: myId, ...base, ...extra });
+      clients.forEach((c) => { if (c.connected) c.publish(topic, msg, { qos: 0 }); });
+    };
+    const isFresh = (id) => lastSeen.has(id) && Date.now() - lastSeen.get(id) < GONE_MS;
+    function evaluate() {
+      const now = Date.now();
+      if (![...clients].some((c) => c.connected)) { if (downSince === null) downSince = now; return; }
+      if (downSince !== null) { const gap = now - downSince; lastSeen.forEach((v, k) => lastSeen.set(k, v + gap)); downSince = null; }
+      const set = new Set([myId]);
+      lastSeen.forEach((v, k) => { if (now - v < GONE_MS) set.add(k); });
+      const key = [...set].sort().join(",");
+      if (key !== lastKey) { lastKey = key; onChange(set); }
+    }
+    function heard(m) {
+      if (!m || !m.id || m.id === myId) return;
+      if (m.bye) lastSeen.delete(m.id); else lastSeen.set(m.id, Date.now());
+      evaluate();
+    }
+    const tick = () => { beat(); evaluate(); };
+    try {
+      const worker = new Worker(URL.createObjectURL(new Blob([`setInterval(() => postMessage(0), ${BEAT_MS});`], { type: "text/javascript" })));
+      worker.onmessage = tick;
+    } catch (e) { setInterval(tick, BEAT_MS); }
+    window.addEventListener("pagehide", () => beat({ bye: true }));
+    return { beat, heard, evaluate, isFresh };
+  }
+
   // Host: the normal on-device store; every change is published to the table's channel,
   // and guests' moves arrive as operations to apply.
   function makeHostStore() {
     const local = makeLocalStore();
-    const snap = { game: null, lobby: [], settings: {}, stats: {}, online: [], hostUid: null };
+    const snap = { game: null, lobby: [], settings: {}, stats: {}, hostUid: myId };
     let id = ls.get("mm-host-id");
     if (!id) { id = "mexe-" + randId().slice(1) + randId().slice(1); ls.set("mm-host-id", id); }
     net.hostId = id;
     const tp = topicsFor(id);
-    const clients = new Set(), up = new Set(), guestsByRelay = new Map();
+    const clients = new Set(), up = new Set();
     const seenOps = new Set();
     let rev = Date.now() * 1000, queued = false;
     const publishState = (c) => { if (c.connected) c.publish(tp.state, enc({ rev, data: snap }), { retain: true, qos: 1 }); };
@@ -1838,16 +1875,8 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
     local.subSettings((s) => { snap.settings = s; broadcast(); });
     local.subStats((s) => { snap.stats = s; broadcast(); });
     const OPS = ["setGame", "updateGame", "setSeat", "delSeat", "setSettings", "setStats"];
-    // Who is connected: every guest seen on any relay, plus the host. Shared with everyone in the state.
-    let onlineKey = "";
-    const countGuests = () => {
-      const all = new Set([myId]);
-      guestsByRelay.forEach((s) => s.forEach((g) => all.add(g)));
-      net.peers = all.size - 1;
-      const key = [...all].sort().join(",");
-      if (key !== onlineKey) { onlineKey = key; snap.online = [...all]; snap.hostUid = myId; broadcast(); presenceUpdate(all); }
-    };
-    const refresh = () => { net.status = up.size ? "open" : clients.size ? "reconnecting" : "connecting"; countGuests(); render(); };
+    const refresh = () => { net.status = up.size ? "open" : clients.size ? "reconnecting" : "connecting"; render(); };
+    const hb = makeHeartbeat(tp.hb, clients, { host: true }, (set) => { net.peers = set.size - 1; presenceUpdate(set); });
 
     function apply(m) {
       if (!m || !OPS.includes(m.op) || !m.id || seenOps.has(m.id)) return;   // a move sent on several relays is applied once
@@ -1858,29 +1887,14 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
       if (m.op === "setGame" && game && args[0] && args[0].id === game.id && args[0].seq < game.seq) return;
       Promise.resolve(local[m.op](...args)).catch(() => {});
     }
-    if (!window.mqtt) { net.status = "connecting"; return local; }
+    if (!window.mqtt) return local;
     RELAYS.forEach((url) => {
-      const c = connectRelay(url, { will: { topic: tp.host, payload: "0", retain: true, qos: 1 } },
-        (c) => {
-          up.add(c); guestsByRelay.set(c, new Set());
-          c.subscribe([tp.op, tp.guests], { qos: 1 });
-          c.publish(tp.host, "1", { retain: true, qos: 1 });
-          publishState(c);
-          refresh(); keepAwake();
-        },
-        (c, topic, payload) => {
-          if (topic === tp.op) apply(dec(payload));
-          else if (topic.startsWith(tp.guests.slice(0, -1))) {
-            const g = topic.slice(tp.guests.length - 1), set = guestsByRelay.get(c) || new Set();
-            payload.length ? set.add(g) : set.delete(g);
-            guestsByRelay.set(c, set); refresh();
-          }
-        },
-        (c) => { up.delete(c); guestsByRelay.delete(c); refresh(); });
+      const c = connectRelay(url, {},
+        (c) => { up.add(c); c.subscribe([tp.op, tp.hb], { qos: 0 }); publishState(c); hb.beat(); refresh(); keepAwake(); },
+        (c, topic, payload) => { if (topic === tp.op) apply(dec(payload)); else if (topic === tp.hb) hb.heard(dec(payload)); },
+        (c) => { up.delete(c); refresh(); });
       clients.add(c);
     });
-    // Closing the page marks the table closed right away for everyone.
-    window.addEventListener("pagehide", () => clients.forEach((c) => { try { if (c.connected) c.publish(tp.host, "0", { retain: true, qos: 0 }); } catch (e) {} }));
     return local;
   }
 
@@ -1888,25 +1902,23 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
   function makeGuestStore(hostId) {
     const subs = { game: [], lobby: [], settings: [], stats: [] };
     const tp = topicsFor(hostId);
-    const clients = new Set(), up = new Set(), hostOn = new Map();
-    let data = null, rev = 0, opN = 0;
+    const clients = new Set(), up = new Set();
+    let data = null, rev = 0, opN = 0, hostUid = null, connectedAt = 0;
     const emit = (k) => subs[k].forEach((f) => f(data[k]));
+    const hostAlive = () => !!hostUid && hb.isFresh(hostUid);
     const refresh = () => {
-      const anyHost = [...hostOn.values()].some(Boolean);
-      net.status = !up.size ? (net.hasState ? "reconnecting" : "connecting") : anyHost ? "open" : hostOn.size ? "hostAway" : "connecting";
-      // Who is connected, as the host last reported it; the host itself drops out when its table closes.
-      if (data) {
-        const set = new Set(data.online || []);
-        set.add(myId);
-        if (!anyHost && data.hostUid) set.delete(data.hostUid);
-        presenceUpdate(set);
-      } else render();
+      if (!up.size) net.status = net.hasState ? "reconnecting" : "connecting";
+      else if (hostAlive()) net.status = "open";
+      else net.status = Date.now() - connectedAt > 10000 ? "hostAway" : "connecting";
+      render();
     };
+    const hb = makeHeartbeat(tp.hb, clients, {}, (set) => { if (data) presenceUpdate(set); refresh(); });
     function onState(m) {
       if (!m || !m.data || m.rev <= rev) return;
       // First contact: skip the home screen and go straight to the table to sit down.
       if (!net.hasState && m.data.game?.status !== "playing") screen = "lobby";
       rev = m.rev; data = m.data; net.hasState = true;
+      if (data.hostUid) hostUid = data.hostUid;
       ["settings", "stats", "lobby", "game"].forEach(emit);
       refresh();
     }
@@ -1918,23 +1930,17 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
       return Promise.resolve();
     }
     if (window.mqtt) RELAYS.forEach((url) => {
-      const c = connectRelay(url, { will: { topic: tp.guest(myId), payload: "", retain: true, qos: 1 } },
-        (c) => {
-          up.add(c);
-          c.subscribe([tp.state, tp.host], { qos: 1 });
-          c.publish(tp.guest(myId), "1", { retain: true, qos: 1 });
-          refresh();
-        },
+      const c = connectRelay(url, {},
+        (c) => { if (!up.size) connectedAt = Date.now(); up.add(c); c.subscribe([tp.state, tp.hb], { qos: 0 }); hb.beat(); refresh(); },
         (c, topic, payload) => {
           if (topic === tp.state) onState(dec(payload));
-          else if (topic === tp.host) { hostOn.set(c, payload.toString() === "1"); refresh(); }
+          else if (topic === tp.hb) { const m = dec(payload); if (m && m.host) hostUid = m.id; hb.heard(m); refresh(); }
         },
-        (c) => { up.delete(c); hostOn.delete(c); refresh(); });
+        (c) => { up.delete(c); refresh(); });
       clients.add(c);
     });
-    // If the table never answers on any relay, say so instead of spinning forever.
-    setTimeout(() => { if (!net.hasState && up.size) { if (![...hostOn.values()].some(Boolean)) { net.status = "hostAway"; render(); } } }, 8000);
-    window.addEventListener("pagehide", () => clients.forEach((c) => { try { if (c.connected) c.publish(tp.guest(myId), "", { retain: true, qos: 0 }); } catch (e) {} }));
+    // If the table never answers, say so instead of spinning forever.
+    setTimeout(refresh, 11000);
     const sub = (k) => (cb) => { subs[k].push(cb); if (data) setTimeout(() => cb(data[k])); return () => {}; };
     return {
       subGame: sub("game"), subLobby: sub("lobby"), subSettings: sub("settings"), subStats: sub("stats"),
