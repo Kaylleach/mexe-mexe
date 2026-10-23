@@ -89,6 +89,7 @@
       <button class="btn big" data-act="copylink">${t("copyLink")}</button>
     </div>`;
   };
+  hooks.guest = () => net.role === "guest";
   hooks.acts.reload = () => location.reload();
   hooks.acts.copylink = async () => {
     const link = tableLink();
@@ -175,6 +176,8 @@
     };
     function onState(m) {
       if (!m || !m.data || m.rev <= rev) return;
+      // First contact: skip the home screen and go straight to the table to sit down.
+      if (!net.hasState && m.data.game?.status !== "playing") screen = "lobby";
       rev = m.rev; data = m.data; net.hasState = true;
       ["settings", "stats", "lobby", "game"].forEach(emit);
       refresh();
