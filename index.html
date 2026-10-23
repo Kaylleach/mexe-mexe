@@ -258,6 +258,12 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .fan-card { position: absolute; bottom: 0; left: calc(50% - var(--cw) / 2 + var(--i) * var(--cw) * .45); transform: rotate(calc(var(--i) * 10deg)); transform-origin: 50% 130%; }
 .fan-card .card { box-shadow: 0 6px 14px rgba(0, 0, 0, .35); }
 .btn.big { width: 100%; font-size: 17px; padding: 14px 20px; }
+/* Someone left the table */
+.pchip.away { opacity: .6; }
+.awaytag { color: var(--bad); font-size: 11px; letter-spacing: .6px; text-transform: uppercase; font-weight: 800; }
+.subtag { color: var(--muted); font-size: 11px; letter-spacing: .6px; text-transform: uppercase; }
+.awaybanner { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--bad); background: rgba(255, 143, 128, .08); }
+.awaybanner p { margin: 0; }
 /* Invited guest: just the table and their name */
 .screen.guest { padding-top: 12px; }
 .logo.small { font-size: 44px; text-align: center; }
@@ -368,6 +374,16 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
       start: "Começar partida",
       addBot: "+ Adicionar computador",
       menu: "Menu",
+      leftTable: "{n} saiu da mesa",
+      backTable: "{n} voltou para a mesa",
+      awayTag: "saiu",
+      subTag: "computador jogando",
+      awayNow: "{n} saiu da mesa.",
+      awayWait: "Esperando {n} voltar…",
+      takeOverBtn: "Computador joga por {n}",
+      takeOverHelp: "Quando a pessoa voltar, ela recebe as cartas de volta automaticamente.",
+      lg_takeover: "Um computador está jogando por {n}.",
+      lg_back: "{n} voltou e pegou as cartas de volta.",
       guestAskName: "Qual é o seu nome?",
       guestSeated: "Pronto, você está na mesa! A partida começa em instantes.",
       atTable: "Na mesa",
@@ -526,6 +542,16 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
       start: "Start game",
       addBot: "+ Add computer",
       menu: "Menu",
+      leftTable: "{n} left the table",
+      backTable: "{n} is back at the table",
+      awayTag: "left",
+      subTag: "computer playing",
+      awayNow: "{n} left the table.",
+      awayWait: "Waiting for {n} to come back…",
+      takeOverBtn: "Computer plays for {n}",
+      takeOverHelp: "When they come back, they get their cards back automatically.",
+      lg_takeover: "A computer is playing for {n}.",
+      lg_back: "{n} came back and took the cards back.",
       guestAskName: "What's your name?",
       guestSeated: "You're at the table! The game starts in a moment.",
       atTable: "At the table",
@@ -833,7 +859,42 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
   }
   const humanCount = () => game.players.filter((p) => !p.bot).length;
   const nickOf = (uid) => (game?.players.find((p) => p.uid === uid)?.nick) || (lobby.find((s) => s.id === uid)?.nick) || "?";
-  const isMyTurn = () => game?.status === "playing" && game.players[game.turn].uid === meId();
+  const isMyTurn = () => game?.status === "playing" && game.players[game.turn].uid === meId() && !game.players[game.turn].bot;
+
+  // ---------- who is connected ----------
+  // The family edition reports which players are connected (a Set of ids); the Claude version
+  // can't tell, so onlineSet stays null there and nobody is ever shown as away.
+  let onlineSet = null;
+  const isAway = (p) => !!onlineSet && !p.bot && !onlineSet.has(p.uid);
+  function presenceUpdate(set) {
+    const prev = onlineSet;
+    onlineSet = set;
+    if (game?.status === "playing" && prev) {
+      for (const p of game.players) {
+        if ((p.bot && !p.sub) || p.uid === myId) continue;
+        if (prev.has(p.uid) && !set.has(p.uid)) { toast(t("leftTable", { n: p.nick })); chime(); }
+        if (!prev.has(p.uid) && set.has(p.uid)) toast(t("backTable", { n: p.nick }));
+      }
+      // Whoever runs the table hands the cards back when someone a computer was covering returns.
+      const back = game.players.filter((p) => p.sub && set.has(p.uid));
+      if (back.length && canConfigure() && !busy) {
+        const g = clone(game);
+        g.players.forEach((p) => { if (p.sub && set.has(p.uid)) { p.bot = false; delete p.sub; } });
+        back.forEach((p) => pushLog(g, { k: "back", n: p.nick }));
+        commit(g);
+      }
+    }
+    render();
+  }
+  // A computer plays an absent player's cards until they return.
+  function takeOver(uid) {
+    const g = clone(game);
+    const p = g.players.find((x) => x.uid === uid);
+    if (!p || p.bot) return;
+    p.bot = true; p.sub = true;
+    pushLog(g, { k: "takeover", n: p.nick });
+    commit(g);
+  }
   const amInGame = () => !!game?.players.some((p) => p.uid === meId());
 
   function buildWs() {
@@ -1041,7 +1102,7 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
     const keyOf = (uid) => nickKey(g.players.find((p) => p.uid === uid)?.nick || "?");
     hist.unshift({
       id, ts: Date.now(),
-      players: g.players.map((p) => ({ k: nickKey(p.nick), nick: p.nick, uid: p.uid, ...(p.bot ? { bot: true } : {}) })),
+      players: g.players.map((p) => ({ k: nickKey(p.nick), nick: p.nick, uid: p.uid, ...(p.bot && !p.sub ? { bot: true } : {}) })),
       winners: (g.winners || []).map(keyOf)
     });
     await store.setStats({ ...stats, history: hist.slice(0, 300) });
@@ -1400,9 +1461,9 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
       const active = game.status === "playing" && i === game.turn;
       const isMe = p.uid === meId() && mode !== "local";
       const n = game.hands[p.uid]?.length ?? 0;
-      return `<div class="pchip ${active ? "turn" : ""} ${isMe ? "me" : ""}">
+      return `<div class="pchip ${active ? "turn" : ""} ${isMe ? "me" : ""} ${isAway(p) ? "away" : ""}">
         ${avatar(p.nick, p.bot)}
-        <span class="pname">${esc(p.nick)}${isMe ? ` <small>(${you()})</small>` : ""}</span>
+        <span class="pname">${esc(p.nick)}${isMe ? ` <small>(${you()})</small>` : ""}${p.sub ? ` <small class="subtag">${t("subTag")}</small>` : isAway(p) ? ` <small class="awaytag">${t("awayTag")}</small>` : ""}</span>
         ${active && p.bot ? `<span class="thinking" role="img" aria-label="${esc(t("thinking"))}"><i></i><i></i><i></i></span>` : ""}
         <span class="pcount" title="${esc(t("cardsLeft", { c: n }))}" aria-label="${esc(t("cardsLeft", { c: n }))}">${n}</span>
       </div>`;
@@ -1488,6 +1549,13 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
     if (!over) h += sandHtml();
     h += playersRow();
     h += hooks.status(true);
+    const cur = game.players[game.turn];
+    if (!over && isAway(cur)) {
+      h += `<div class="awaybanner" role="alert">
+        <p><b>${t("awayNow", { n: cur.nick })}</b> ${t("awayWait", { n: cur.nick })}</p>
+        ${canConfigure() ? `<div class="actions"><button class="btn primary" data-act="takeover" data-id="${esc(cur.uid)}">${t("takeOverBtn", { n: cur.nick })}</button></div><p class="note">${t("takeOverHelp")}</p>` : ""}
+      </div>`;
+    }
     if (mode === "online" && !amInGame()) h += `<p class="note">${t("spectator")}</p>`;
     if (!over && coverShowing()) {
       return h + `<div class="panel"><h2>${t("cover", { n: nickOf(turnUid) })}</h2><p class="note">${t("coverHelp", { n: nickOf(turnUid) })}</p><div class="actions"><button class="btn primary" data-act="reveal">${t("reveal", { n: nickOf(turnUid) })}</button></div></div>` + tableHtml(false);
@@ -1609,6 +1677,7 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
       case "draw": drawAndPass(); break;
       case "start": startGame(); break;
       case "addbot": addBot(); break;
+      case "takeover": takeOver(el.dataset.id); break;
       case "timer": setTimer(+v); break;
       case "botspeed": store.setSettings({ ...settings, botSpeed: v }).catch(() => toast(t("saveFail"))); break;
       case "go":
@@ -1696,7 +1765,8 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
   const enc = (o) => JSON.stringify(o);
   const dec = (buf) => { try { return JSON.parse(buf.toString()); } catch (e) { return null; } };
   function connectRelay(url, opts, onConnect, onMessage, onDown) {
-    const c = window.mqtt.connect(url, { keepalive: 20, reconnectPeriod: 3000, connectTimeout: 10000, clean: true, clientId: "mm" + randId(), ...opts });
+    // A short keepalive means a phone that drops off is noticed in about 15 seconds.
+    const c = window.mqtt.connect(url, { keepalive: 10, reconnectPeriod: 3000, connectTimeout: 10000, clean: true, clientId: "mm" + randId(), ...opts });
     c.on("connect", () => onConnect(c));
     c.on("message", (topic, payload) => onMessage(c, topic, payload));
     c.on("close", () => onDown(c));
@@ -1749,7 +1819,7 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
   // and guests' moves arrive as operations to apply.
   function makeHostStore() {
     const local = makeLocalStore();
-    const snap = { game: null, lobby: [], settings: {}, stats: {} };
+    const snap = { game: null, lobby: [], settings: {}, stats: {}, online: [], hostUid: null };
     let id = ls.get("mm-host-id");
     if (!id) { id = "mexe-" + randId().slice(1) + randId().slice(1); ls.set("mm-host-id", id); }
     net.hostId = id;
@@ -1768,7 +1838,15 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
     local.subSettings((s) => { snap.settings = s; broadcast(); });
     local.subStats((s) => { snap.stats = s; broadcast(); });
     const OPS = ["setGame", "updateGame", "setSeat", "delSeat", "setSettings", "setStats"];
-    const countGuests = () => { const all = new Set(); guestsByRelay.forEach((s) => s.forEach((g) => all.add(g))); net.peers = all.size; };
+    // Who is connected: every guest seen on any relay, plus the host. Shared with everyone in the state.
+    let onlineKey = "";
+    const countGuests = () => {
+      const all = new Set([myId]);
+      guestsByRelay.forEach((s) => s.forEach((g) => all.add(g)));
+      net.peers = all.size - 1;
+      const key = [...all].sort().join(",");
+      if (key !== onlineKey) { onlineKey = key; snap.online = [...all]; snap.hostUid = myId; broadcast(); presenceUpdate(all); }
+    };
     const refresh = () => { net.status = up.size ? "open" : clients.size ? "reconnecting" : "connecting"; countGuests(); render(); };
 
     function apply(m) {
@@ -1816,7 +1894,13 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
     const refresh = () => {
       const anyHost = [...hostOn.values()].some(Boolean);
       net.status = !up.size ? (net.hasState ? "reconnecting" : "connecting") : anyHost ? "open" : hostOn.size ? "hostAway" : "connecting";
-      render();
+      // Who is connected, as the host last reported it; the host itself drops out when its table closes.
+      if (data) {
+        const set = new Set(data.online || []);
+        set.add(myId);
+        if (!anyHost && data.hostUid) set.delete(data.hostUid);
+        presenceUpdate(set);
+      } else render();
     };
     function onState(m) {
       if (!m || !m.data || m.rev <= rev) return;
