@@ -1,5 +1,6 @@
 // Builds the family edition (familia/index.html) from the Claude version (mexe-mexe.html):
-// same game and screens, but a standalone page whose table runs peer-to-peer, no accounts.
+// same game and screens, but a standalone page whose table is hosted on the player's own
+// device and connected through free public relays (net.js), no accounts.
 // Run after changing mexe-mexe.html:  node familia/build.js
 const fs = require("fs");
 const path = require("path");
@@ -7,7 +8,7 @@ const zlib = require("zlib");
 
 const root = path.join(__dirname, "..");
 const src = fs.readFileSync(path.join(root, "mexe-mexe.html"), "utf8");
-const p2p = fs.readFileSync(path.join(__dirname, "p2p.js"), "utf8");
+const p2p = fs.readFileSync(path.join(__dirname, "net.js"), "utf8");
 
 const bootAt = src.indexOf("  // ---------- boot ----------");
 if (bootAt < 0) throw new Error("boot section not found in mexe-mexe.html");
@@ -34,6 +35,9 @@ img { max-width: 100%; }
 .invite { display: flex; flex-direction: column; gap: 10px; }
 a.btn { display: block; text-align: center; text-decoration: none; }
 .btn.whatsapp { background: #25d366; color: #06301a; border-color: transparent; }
+.spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--gold); animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
 </style>
 `;
 
@@ -50,7 +54,7 @@ ${titleMatch[0]}<meta name="description" content="Mexe-Mexe com as regras da fam
 <meta name="apple-mobile-web-app-title" content="Mexe-Mexe">
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="icon" href="icon.png">
-${fontLinks}<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+${fontLinks}<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
 ${extraCss}</head>
 <body>
 ${body}
