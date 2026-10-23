@@ -294,7 +294,11 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
 .slot .plus { font-size: 28px; line-height: 1; font-weight: 400; }
 .avatar { width: 32px; height: 32px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--gold); color: var(--gold-ink); font-weight: 800; font-size: 15px; }
 .avatar.lg { width: 52px; height: 52px; font-size: 22px; }
-.avatar.bot { background: transparent; color: var(--muted); border: 1.5px dashed var(--muted); }
+.avatar[style] { background: var(--pc); color: #14231c; }
+.avatar.bot { background: transparent; color: var(--pc, var(--muted)); border: 1.5px dashed var(--pc, var(--muted)); }
+/* Your most recent draw */
+.card.drawn { box-shadow: 0 0 0 2px var(--chalk), 0 1px 3px rgba(0, 0, 0, .4); }
+.drawntag { position: absolute; top: -9px; left: 50%; transform: translateX(-50%); z-index: 1; padding: 1px 6px; border-radius: 999px; background: var(--chalk); color: var(--felt); font: 800 9px var(--f-body); letter-spacing: .6px; text-transform: uppercase; white-space: nowrap; box-shadow: 0 1px 3px rgba(0, 0, 0, .4); }
 .banner-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 14px; border-radius: 12px; background: var(--shade); }
 .startbar { position: sticky; bottom: 0; margin-top: auto; display: flex; flex-direction: column; gap: 6px; align-items: stretch; text-align: center; padding: 14px 0 calc(14px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(to bottom, transparent, var(--felt-lo) 35%); }
 .startbar .actions { justify-content: center; }
@@ -329,11 +333,11 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
 .standings .grow { flex: 1; font-weight: 700; }
 /* What changed since your last move */
 :root { --new: #8fd3ff; }
-.card.lastplay { box-shadow: 0 0 0 2.5px var(--new), 0 0 14px rgba(143, 211, 255, .55); }
+.card.lastplay { box-shadow: 0 0 0 3px var(--pc, var(--new)), 0 0 14px var(--pc, var(--new)); }
 .card.lastplay.pop { animation: landed .9s ease-out; }
 @keyframes landed { 0% { transform: translateY(-14px) scale(1.12); opacity: .2; } 60% { transform: translateY(2px) scale(1); opacity: 1; } 100% { transform: none; } }
-.meld.changed { border-color: var(--new); border-style: solid; }
-.meld .newtag { color: var(--new); }
+.meld.changed { border-color: var(--pc, var(--new)); border-style: solid; }
+.meld .newtag { color: var(--pc, var(--new)); }
 .activity { display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; border-radius: 14px; background: rgba(143, 211, 255, .08); border: 1px solid rgba(143, 211, 255, .3); }
 .activity.pop { animation: fadein .5s ease-out; }
 @keyframes fadein { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
@@ -378,6 +382,7 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
       start: "Começar partida",
       addBot: "+ Adicionar computador",
       menu: "Menu",
+      drawnTag: "nova",
       leftTable: "{n} saiu da mesa",
       backTable: "{n} voltou para a mesa",
       awayTag: "saiu",
@@ -546,6 +551,7 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
       start: "Start game",
       addBot: "+ Add computer",
       menu: "Menu",
+      drawnTag: "new",
       leftTable: "{n} left the table",
       backTable: "{n} is back at the table",
       awayTag: "left",
@@ -948,7 +954,7 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
     const lm = game.lastMove;
     if (!lm || lm.seq !== game.seq || prevSeq === game.seq) return;
     justMoved = true;
-    (lm.melds || []).forEach((k) => { meldBy[k] = nickOf(lm.by); });
+    (lm.melds || []).forEach((k) => { meldBy[k] = lm.by; });
     const mover = game.players.find((p) => p.uid === lm.by);
     const mine = mode === "local" ? mover && !mover.bot : lm.by === myId;
     if (mine) baseline = snapTable(game);
@@ -993,6 +999,9 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
     g.passStreak = 0; g.seq++; g.ts = Date.now(); g.touched = false;
     // What this move changed, so everyone can see it: the cards laid down and the melds that are new or rearranged.
     g.lastMove = { by: me, seq: g.seq, cards: oldHand.filter((id) => !hand.includes(id)), melds: g.table.map(meldKey).filter((k) => !before.has(k)) };
+    // Remember who put each card on the table, so its highlight can wear that player's color.
+    g.placed = { ...(g.placed || {}) };
+    g.lastMove.cards.forEach((id) => { g.placed[id] = me; });
     pushLog(g, { k: "played", n: nickOf(me), c: played });
     if (hand.length === 0) {
       g.status = "over"; g.winners = [me]; g.scores[me] = (g.scores[me] || 0) + 1;
@@ -1020,7 +1029,10 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
     g.touched = false;
     if (g.deck.length) {
       const n = Math.min(penalty ? 3 : 1, g.deck.length);
-      for (let i = 0; i < n; i++) g.hands[me].push(g.deck.pop());
+      const drawn = [];
+      for (let i = 0; i < n; i++) { const id = g.deck.pop(); drawn.push(id); g.hands[me].push(id); }
+      // Each player's most recent draw, so their hand can mark it as new.
+      g.lastDraw = { ...(g.lastDraw || {}), [me]: drawn };
       g.passStreak = 0;
       pushLog(g, penalty ? { k: "bought3", n: nickOf(me), c: n } : { k: "bought", n: nickOf(me) });
     } else {
@@ -1318,11 +1330,12 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
   }
 
   // ---------- render ----------
-  function cardHtml(id, { interactive = false, fresh = false, last = false } = {}) {
+  function cardHtml(id, { interactive = false, fresh = false, last = false, by = null, drawn = false } = {}) {
     const { r, s } = parse(id);
-    const cls = ["card", s === "H" || s === "D" ? "red" : "", sel.has(id) ? "sel" : "", fresh ? "fresh" : "", last ? "lastplay" : "", last && justMoved ? "pop" : "", interactive ? "" : "static"].join(" ");
+    const cls = ["card", s === "H" || s === "D" ? "red" : "", sel.has(id) ? "sel" : "", fresh ? "fresh" : "", last ? "lastplay" : "", last && justMoved ? "pop" : "", drawn ? "drawn" : "", interactive ? "" : "static"].join(" ");
     const attrs = interactive ? `data-act="card" data-id="${id}" aria-pressed="${sel.has(id)}"` : `tabindex="-1" aria-disabled="true"`;
-    return `<button class="${cls}" ${attrs} aria-label="${RL(r)}${SYM[s]}"><span class="ix">${RL(r)}<i>${SYM[s]}</i></span><span class="pip">${SYM[s]}</span></button>`;
+    const style = last && by && colorOf(by) ? ` style="--pc:${colorOf(by)}"` : "";
+    return `<button class="${cls}" ${attrs}${style} aria-label="${RL(r)}${SYM[s]}${drawn ? " · " + t("drawnTag") : ""}">${drawn ? `<span class="drawntag" aria-hidden="true">${t("drawnTag")}</span>` : ""}<span class="ix">${RL(r)}<i>${SYM[s]}</i></span><span class="pip">${SYM[s]}</span></button>`;
   }
   // Screens follow the usual card-game flow: Home → Sala (seats & options) → Partida, with the
   // scoreboard one tap from Home, everything else in the ☰ menu, and a results sheet at the end.
@@ -1339,7 +1352,15 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
   const you = () => (lang === "pt" ? "você" : "you");
   const gameKey = () => (game ? game.id || "s" + game.seq : null);
   const initial = (nick) => (String(nick).replace(/^Robô\s+/, "").trim()[0] || "?").toUpperCase();
-  function avatar(nick, bot, cls = "") { return `<span class="avatar ${bot ? "bot" : ""} ${cls}" aria-hidden="true">${esc(initial(nick))}</span>`; }
+  // Each seat has its own color, used on the player's badge and on the cards they put down.
+  const PLAYER_COLORS = ["#8fd3ff", "#ff9ecb", "#ffb35c", "#c3a6ff", "#7fe0c0", "#c8f07a"];
+  function colorOf(uid) {
+    let i = game?.players ? game.players.findIndex((p) => p.uid === uid) : -1;
+    if (i < 0) i = lobby.findIndex((s) => s.id === uid);
+    return i < 0 ? "" : PLAYER_COLORS[i % PLAYER_COLORS.length];
+  }
+  const pcStyle = (uid) => { const c = colorOf(uid); return c ? ` style="--pc:${c}"` : ""; };
+  function avatar(nick, bot, cls = "", uid = null) { return `<span class="avatar ${bot ? "bot" : ""} ${cls}"${uid ? pcStyle(uid) : ""} aria-hidden="true">${esc(initial(nick))}</span>`; }
   function resultTitle() {
     const w = game.winners || [];
     return game.aborted || !w.length ? t("aborted") : w.length > 1 ? t("wonMany", { n: w.map(nickOf).join(", ") }) : t("won", { n: nickOf(w[0]) });
@@ -1402,7 +1423,7 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
     const playing = game?.status === "playing";
     const seat = (s) => `<div class="slot ${s.bot ? "bot" : ""} ${s.id === myId ? "me" : ""}">
         ${s.id === myId ? `<button class="iconbtn tiny x" data-act="unseat" data-id="${esc(s.id)}" aria-label="${esc(t("stand"))}">${ICON.close}</button>` : ""}
-        ${avatar(s.nick, s.bot, "lg")}
+        ${avatar(s.nick, s.bot, "lg", s.id)}
         <b class="slot-name">${esc(s.nick)}</b>
         <small>${s.bot ? t("botTag") : s.id === myId ? you() : t("personTag")}</small>
       </div>`;
@@ -1430,7 +1451,7 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
     const seats = lobby.slice(0, 6), waiting = lobby.slice(6);
     const slot = (s) => `<div class="slot ${s.bot ? "bot" : ""} ${s.id === myId && mode !== "local" ? "me" : ""}">
         ${canWrite ? `<button class="iconbtn tiny x" data-act="unseat" data-id="${esc(s.id)}" aria-label="${esc((s.id === myId ? t("stand") : t("remove")) + ": " + s.nick)}">${ICON.close}</button>` : ""}
-        ${avatar(s.nick, s.bot, "lg")}
+        ${avatar(s.nick, s.bot, "lg", s.id)}
         <b class="slot-name">${esc(s.nick)}</b>
         <small>${s.bot ? t("botTag") : s.id === myId && mode !== "local" ? you() : t("personTag")}</small>
       </div>`;
@@ -1472,7 +1493,7 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
       const isMe = p.uid === meId() && mode !== "local";
       const n = game.hands[p.uid]?.length ?? 0;
       return `<div class="pchip ${active ? "turn" : ""} ${isMe ? "me" : ""} ${isAway(p) ? "away" : ""}">
-        ${avatar(p.nick, p.bot)}
+        ${avatar(p.nick, p.bot, "", p.uid)}
         <span class="pname">${esc(p.nick)}${isMe ? ` <small>(${you()})</small>` : ""}${p.sub ? ` <small class="subtag">${t("subTag")}</small>` : isAway(p) ? ` <small class="awaytag">${t("awayTag")}</small>` : ""}</span>
         ${active && p.bot ? `<span class="thinking" role="img" aria-label="${esc(t("thinking"))}"><i></i><i></i><i></i></span>` : ""}
         <span class="pcount" title="${esc(t("cardsLeft", { c: n }))}" aria-label="${esc(t("cardsLeft", { c: n }))}">${n}</span>
@@ -1482,7 +1503,7 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
   const logLine = (e) => t("lg_" + e.k, { n: e.n || "", c: e.c ?? "" });
   function logItem(e) {
     const p = game.players.find((x) => x.nick === e.n);
-    return `<li>${e.n ? avatar(e.n, p?.bot) : `<span class="avatar ghost" aria-hidden="true"></span>`}<span>${logLine(e)}</span></li>`;
+    return `<li>${e.n ? avatar(e.n, p?.bot, "", p?.uid) : `<span class="avatar ghost" aria-hidden="true"></span>`}<span>${logLine(e)}</span></li>`;
   }
   // "Since your last move": every move the others made while you waited, oldest first.
   function activityBox() {
@@ -1504,9 +1525,9 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
     let inner = melds.map((m, i) => {
       const bad = mine && st.bad.includes(i);
       const key = meldKey(m), isNew = changed.has(key);
-      return `<div class="meld ${bad ? "bad" : isNew ? "changed" : ""}">
-        ${bad ? `<span class="tag">${t("invalid")}</span>` : isNew ? `<span class="tag newtag">${meldBy[key] ? esc(meldBy[key]) : t("newTag")}</span>` : ""}
-        <div class="row">${m.map((id) => cardHtml(id, { interactive: mine && !busy, fresh: mine && ws.orig.has(id), last: isNewCard(id) && !(mine && ws.orig.has(id)) })).join("")}</div>
+      return `<div class="meld ${bad ? "bad" : isNew ? "changed" : ""}"${isNew && meldBy[key] ? pcStyle(meldBy[key]) : ""}>
+        ${bad ? `<span class="tag">${t("invalid")}</span>` : isNew ? `<span class="tag newtag">${meldBy[key] ? esc(nickOf(meldBy[key])) : t("newTag")}</span>` : ""}
+        <div class="row">${m.map((id) => cardHtml(id, { interactive: mine && !busy, fresh: mine && ws.orig.has(id), last: isNewCard(id) && !(mine && ws.orig.has(id)), by: game.placed?.[id] })).join("")}</div>
         ${picking ? `<button class="drop" data-act="drop" data-v="${i}">${t("placeHere")}</button>` : ""}
       </div>`;
     }).join("");
@@ -1542,7 +1563,7 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
           <button data-act="sort" data-v="rank" aria-pressed="${sortMode === "rank"}">${t("sortRank")}</button>
         </div>
       </div>
-      <div class="hand ${backable ? "target" : ""}">${sorted.map((id) => cardHtml(id, { interactive: !!mine && !busy && canWrite })).join("")}</div>
+      <div class="hand ${backable ? "target" : ""}">${sorted.map((id) => cardHtml(id, { interactive: !!mine && !busy && canWrite, drawn: (game.lastDraw?.[me] || []).includes(id) })).join("")}</div>
       ${hint}${actions}
     </section>`;
   }
@@ -1597,7 +1618,7 @@ button.slot.empty:hover { border-color: var(--gold); color: var(--gold); }
     return sheet(t("gameOver"), `
       <p class="result-title">${resultTitle()}</p>
       ${game.deckOut ? `<p class="note">${t("deckOut")}</p>` : ""}
-      <ol class="standings">${standings.map((p) => `<li class="${won.includes(p.uid) ? "win" : ""}">${avatar(p.nick, p.bot)}<span class="grow">${esc(p.nick)}</span><span class="note">${won.includes(p.uid) && !game.deckOut ? t("wentOut") : t("cardsLeft", { c: game.hands[p.uid]?.length ?? 0 })}</span></li>`).join("")}</ol>
+      <ol class="standings">${standings.map((p) => `<li class="${won.includes(p.uid) ? "win" : ""}">${avatar(p.nick, p.bot, "", p.uid)}<span class="grow">${esc(p.nick)}</span><span class="note">${won.includes(p.uid) && !game.deckOut ? t("wentOut") : t("cardsLeft", { c: game.hands[p.uid]?.length ?? 0 })}</span></li>`).join("")}</ol>
       <div class="sheet-actions">
         ${canConfigure() ? `<button class="btn primary big" data-act="again" ${busy ? "disabled" : ""}>${t("playAgain")}</button>` : ""}
         <button class="btn big" data-act="seeTable">${t("seeTable")}</button>
